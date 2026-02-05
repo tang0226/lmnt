@@ -1,5 +1,4 @@
-import { L, mount, unmount } from '../../src/lmnts.js';
-import { createStore } from '../../src/store.js';
+import { L, mount, unmount } from '../../src/lmnt.js';
 
 function Counter(init = 0) {
   var count = init;
@@ -74,8 +73,9 @@ function GoAwayNested(content1, content2) {
   return self;
 }
 
+var a;
 mount(
-  L('div', { style: { 'background': '#EEE', 'font-family': 'sans-serif' }},
+  a = L('div', { style: { 'background': '#EEE', 'font-family': 'sans-serif' }},
     L('p', {}, 'test paragraph.'),
     L('hr'),
     
@@ -99,3 +99,5 @@ mount(
   ),
   document.body
 );
+
+console.log(a);

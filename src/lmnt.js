@@ -7,7 +7,7 @@ export function L(tag, props = {}, ...children) {
   }
   
   const el = document.createElement(tag);
-  var onMount, onUnmount, useLifecycle = false;
+  var _onMount, _onUnmount, _useLifecycle = false;
 
   for (const prop of Object.keys(props)) {
     const val = props[prop];
@@ -26,13 +26,13 @@ export function L(tag, props = {}, ...children) {
       // component props
       case 'onMount':
       case 'onmount':
-        onMount = val;
-        useLifecycle = true;
+        _onMount = val;
+        _useLifecycle = true;
         break;
       case 'onUnmount':
       case 'onunmount':
-        onUnmount = val;
-        useLifecycle = true;
+        _onUnmount = val;
+        _useLifecycle = true;
         break;
 
       // special-case HTML props
@@ -53,8 +53,8 @@ export function L(tag, props = {}, ...children) {
       el.appendChild(child);
     }
     else if (typeof child == 'object') {
-      if (child.useLifecycle) {
-        useLifecycle = true;
+      if (child._useLifecycle) {
+        _useLifecycle = true;
       }
       el.appendChild(child.el);
     }
@@ -63,15 +63,15 @@ export function L(tag, props = {}, ...children) {
     }
   }
 
-  return { el, children, useLifecycle, onMount, onUnmount };
+  return { tag, el, children, _useLifecycle, _onMount, _onUnmount };
 }
 
 
 function runOnmountCallbacks(elObj) {
   // Run parent's onMount first
-  elObj.onMount?.();
+  elObj._onMount?.();
   for (const child of elObj.children) {
-    if (child.useLifecycle) {
+    if (child._useLifecycle) {
       runOnmountCallbacks(child);
     }
   }
@@ -85,11 +85,11 @@ export function mount(elObj, container) {
 function runOnunmountCallbacks(elObj) {
   // Run childrens' onUnmouns first
   for (const child of elObj.children) {
-    if (child.useLifecycle) {
+    if (child._useLifecycle) {
       runOnunmountCallbacks(child);
     }
   }
-  elObj.onUnmount?.();
+  elObj._onUnmount?.();
 }
 
 export function unmount(elObj) {
