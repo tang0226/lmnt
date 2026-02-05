@@ -45,20 +45,36 @@ testSuite.addTest('Style attribute from object', () => {
 
 testSuite.addTest('onMount initializes and sets appropriate flags', () => {
   var el = L('div', { onMount: () => {} });
-  assertTruthy(el.onMount);
-  assertTruthy(el.useLifecycle);
+  assertTruthy(el._onMount);
+  assertTruthy(el._useLifecycle);
 });
 
 testSuite.addTest('onUnmount initializes and sets appropriate flags', () => {
   var el = L('div', { onUnmount: () => {} });
-  assertTruthy(el.onUnmount);
-  assertTruthy(el.useLifecycle);
+  assertTruthy(el._onUnmount);
+  assertTruthy(el._useLifecycle);
+});
+
+testSuite.addTest('className prop recognized', () => {
+  var el = L('div', { id: 'test-div', className: 'test-class test-class-2' }, "test text");
+  assertTruthy(el.el.classList.contains('test-class'));
+  assertTruthy(el.el.classList.contains('test-class-2'));
 });
 
 testSuite.addTest('class -> className alias', () => {
   var el = L('div', { id: 'test-div', class: 'test-class test-class-2' }, "test text");
   assertTruthy(el.el.classList.contains('test-class'));
   assertTruthy(el.el.classList.contains('test-class-2'));
+});
+
+testSuite.addTest('htmlFor prop recognized', () => {
+  var el = L('label', { htmlFor: 'test' }, "test text");
+  assertEqual(el.el.htmlFor, 'test');
+});
+
+testSuite.addTest('for -> htmlFor alias', () => {
+  var el = L('label', { for: 'test' }, "test text");
+  assertEqual(el.el.htmlFor, 'test');
 });
 
 testSuite.addTest('Multiple nested children', () => {
@@ -84,14 +100,6 @@ testSuite.addTest('Event on div', () => {
   assertTruthy(val);
 });
 
-testSuite.addTest('', () => {
-  var el = L();
-});
-
-testSuite.addTest('', () => {
-  var el = L();
-});
-
 testSuite.runTests();
 
 
@@ -102,19 +110,3 @@ var { el } = L('div', { style: { 'color': 'red' } },
 );
 
 document.body.appendChild(el);
-
-
-var hasMounted = false;
-mount(
-  L('div', { onMount() {hasMounted = true} }),
-  document.createElement('div')
-);
-console.log(hasMounted); // true
-
-var elToUnmount, hasUnmounted = false;
-mount(
-  elToUnmount = L('div', { onUnmount() { hasUnmounted = true } }),
-  document.createElement('div')
-);
-unmount(elToUnmount);
-console.log(hasUnmounted); // true

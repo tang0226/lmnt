@@ -37,9 +37,11 @@ export function L(tag, props = {}, ...children) {
 
       // special-case HTML props
       case 'class':
+      case 'className':
         el.className = val;
         break;
       case 'for':
+      case 'htmlFor':
         el.htmlFor = val;
         break;
 
