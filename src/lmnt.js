@@ -1,3 +1,8 @@
+const propAliases = {
+  'class': 'className',
+  'for': 'htmlFor',
+};
+
 export function L(tag, props = {}, ...children) {
 
   // Treat props like an element / text node if applicable
@@ -11,42 +16,38 @@ export function L(tag, props = {}, ...children) {
 
   for (const prop of Object.keys(props)) {
     const val = props[prop];
-    switch (prop) {
-      case 'style':
-        if (typeof val == 'object') {
-          for (const cssProp of Object.keys(val)) {
-            el.style[cssProp] = val[cssProp];
-          }
-        }
-        if (typeof val == 'string') {
-          el.style = val;
-        }
-        break;
-      
-      // component props
-      case 'onMount':
-      case 'onmount':
-        _onMount = val;
-        _useLifecycle = true;
-        break;
-      case 'onUnmount':
-      case 'onunmount':
-        _onUnmount = val;
-        _useLifecycle = true;
-        break;
 
-      // special-case HTML props
-      case 'class':
-      case 'className':
-        el.className = val;
-        break;
-      case 'for':
-      case 'htmlFor':
-        el.htmlFor = val;
-        break;
-
-      default:
-        el[prop] = val;
+    // Basic lifecycle functions
+    if (prop == 'onMount') {
+      _onMount = val;
+      _useLifecycle = true;
+    }
+    else if (prop == 'onUnmount') {
+      _onUnmount = val;
+      _useLifecycle = true;
+    }
+    // Event listeners
+    else if (/^on.+/.test(prop)) {
+      el.addEventListener(prop.slice(2).toLowerCase(), val);
+    }
+    // Style
+    else if (prop == 'style') {
+      if (typeof val == 'object') {
+        for (const cssProp of Object.keys(val)) {
+          el.style[cssProp] = val[cssProp];
+        }
+      }
+      if (typeof val == 'string') {
+        el.style = val;
+      }
+    }
+    // Aliased props like `class` and `for`
+    else if (propAliases[prop]) {
+      el[propAliases[prop]] = val;
+    }
+    // All other props
+    else {
+      el[prop] = val;
     }
   }
 

@@ -4,11 +4,11 @@ function Counter(init = 0) {
   var count = init;
   
   var self = L('button', {
-    onclick: () => {
+    onClick: () => {
       count++;
       render();
     },
-    onmount: () => {
+    onMount: () => {
       console.log(self.el.clientWidth);
     },
     style: 'display: block',
@@ -29,13 +29,13 @@ function Canvas() {
     width: 400,
     height: 400,
     style: 'border: 1px solid black',
-    onmount: () => {
+    onMount: () => {
       ctx = self.el.getContext('2d');
       ctx.fillStyle = '#000';
       ctx.fillRect(10, 10, 50, 50);
       console.log('canvas mounted')
     },
-    onmousedown: (e) => {
+    onMouseDown: (e) => {
       ctx.fillRect(e.offsetX, e.offsetY, 10, 10);
     },
   });
@@ -45,9 +45,9 @@ function Canvas() {
 
 function GoAway(content) {
   var self = L('div', {
-    onmount: () => { console.log(content + ' mounted') },
-    onclick: () => { unmount(self) },
-    onunmount: () => { console.log(content + ' unmounted') },
+    onMount: () => { console.log(content + ' mounted') },
+    onClick: () => { unmount(self) },
+    onUnmount: () => { console.log(content + ' unmounted') },
   }, content);
   return self;
 }
@@ -56,16 +56,16 @@ function GoAwayNested(content1, content2) {
   var self = L(
     'div',
     {
-      onmount: () => { console.log(content1 + ' mounted') },
-      onclick: () => { unmount(self) },
-      onunmount: () => { console.log(content1 + ' unmounted') },
+      onMount: () => { console.log(content1 + ' mounted') },
+      onClick: () => { unmount(self) },
+      onUnmount: () => { console.log(content1 + ' unmounted') },
     },
     content1,
     L(
       'span',
       {
-        onmount: () => { console.log(`${content1}:${content2} mounted`) },
-        onunmount: () => { console.log(`${content1}:${content2} unmounted`) },
+        onMount: () => { console.log(`${content1}:${content2} mounted`) },
+        onUnmount: () => { console.log(`${content1}:${content2} unmounted`) },
       },
       ' ' + content2
     )
@@ -87,7 +87,7 @@ mount(
     ),
 
     // testing a component render function
-    L('button', { onclick: () => alert('hello world!') }, 'Hallo'),
+    L('button', { onClick: () => alert('hello world!') }, 'Hallo'),
     ...[1,2,3].map((n) => L('div', {}, n.toString())),
 
     L('div', {}, 'counter function'),
@@ -95,7 +95,7 @@ mount(
     Canvas(),
     ...[1,2,3,4,5].map((n) => GoAway(n)),
     GoAwayNested('outer', 'inner'),
-    L('div', { onmount: () => { console.log("div mounted")} }),
+    L('div', { onMount: () => { console.log("div mounted")} }),
   ),
   document.body
 );
