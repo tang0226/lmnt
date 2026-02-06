@@ -37,10 +37,16 @@ testSuite.addTest('Style attribute from string', () => {
   assertEqual(el.el.style['font-family'], 'sans-serif');
 });
 
-testSuite.addTest('Style attribute from object', () => {
+testSuite.addTest('Style attribute from object (hyphenated props)', () => {
   var el = L('div', { style: { 'background-color': 'red', 'font-family': 'sans-serif'} });
-  assertEqual(el.el.style['background-color'], 'red');
-  assertEqual(el.el.style['font-family'], 'sans-serif');
+  assertEqual(el.el.style.backgroundColor, 'red');
+  assertEqual(el.el.style.fontFamily, 'sans-serif');
+});
+
+testSuite.addTest('Style attribute from object (camelCase props)', () => {
+  var el = L('div', { style: { backgroundColor: 'red', fontFamily: 'sans-serif'} });
+  assertEqual(el.el.style.backgroundColor, 'red');
+  assertEqual(el.el.style.fontFamily, 'sans-serif');
 });
 
 testSuite.addTest('onMount initializes and sets appropriate flags', () => {
