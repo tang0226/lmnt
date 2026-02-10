@@ -12,7 +12,7 @@ export function L(tag, props = {}, ...children) {
   }
   
   const el = document.createElement(tag);
-  var _onMount, _onUnmount, _useLifecycle = false;
+  var _onMount, _onUnmount, _hasLifecycleInSubtree = false;
 
   for (const prop of Object.keys(props)) {
     const val = props[prop];
@@ -20,14 +20,14 @@ export function L(tag, props = {}, ...children) {
     // Basic lifecycle functions
     if (prop == 'onMount') {
       _onMount = val;
-      _useLifecycle = true;
+      _hasLifecycleInSubtree = true;
     }
     else if (prop == 'onUnmount') {
       _onUnmount = val;
-      _useLifecycle = true;
+      _hasLifecycleInSubtree = true;
     }
     // Event listeners
-    else if (/^on.+/.test(prop)) {
+    else if (prop.startsWith("on") && prop[2] === prop[2].toUpperCase()) {
       el.addEventListener(prop.slice(2).toLowerCase(), val);
     }
     // Style
@@ -38,7 +38,7 @@ export function L(tag, props = {}, ...children) {
         }
       }
       if (typeof val == 'string') {
-        el.style = val;
+        el.style.cssText = val;
       }
     }
     // Aliased props like `class` and `for`
@@ -56,8 +56,8 @@ export function L(tag, props = {}, ...children) {
       el.appendChild(child);
     }
     else if (typeof child == 'object') {
-      if (child._useLifecycle) {
-        _useLifecycle = true;
+      if (child._hasLifecycleInSubtree) {
+        _hasLifecycleInSubtree = true;
       }
       el.appendChild(child.el);
     }
@@ -66,7 +66,7 @@ export function L(tag, props = {}, ...children) {
     }
   }
 
-  return { tag, el, children, _useLifecycle, _onMount, _onUnmount };
+  return { tag, el, children, _hasLifecycleInSubtree, _onMount, _onUnmount };
 }
 
 
@@ -74,7 +74,7 @@ function runOnmountCallbacks(elObj) {
   // Run parent's onMount first
   elObj._onMount?.();
   for (const child of elObj.children) {
-    if (child._useLifecycle) {
+    if (child._hasLifecycleInSubtree) {
       runOnmountCallbacks(child);
     }
   }
@@ -88,7 +88,7 @@ export function mount(elObj, container) {
 function runOnunmountCallbacks(elObj) {
   // Run childrens' onUnmouns first
   for (const child of elObj.children) {
-    if (child._useLifecycle) {
+    if (child._hasLifecycleInSubtree) {
       runOnunmountCallbacks(child);
     }
   }
