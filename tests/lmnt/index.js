@@ -52,13 +52,13 @@ testSuite.addTest('Style attribute from object (camelCase props)', () => {
 testSuite.addTest('onMount initializes and sets appropriate flags', () => {
   var el = L('div', { onMount: () => {} });
   assertTruthy(el._onMount);
-  assertTruthy(el._useLifecycle);
+  assertTruthy(el._hasLifecycleInSubtree);
 });
 
 testSuite.addTest('onUnmount initializes and sets appropriate flags', () => {
   var el = L('div', { onUnmount: () => {} });
   assertTruthy(el._onUnmount);
-  assertTruthy(el._useLifecycle);
+  assertTruthy(el._hasLifecycleInSubtree);
 });
 
 testSuite.addTest('className prop recognized', () => {
