@@ -49,16 +49,14 @@ testSuite.addTest('Style attribute from object (camelCase props)', () => {
   assertEqual(el.el.style.fontFamily, 'sans-serif');
 });
 
-testSuite.addTest('onMount initializes and sets appropriate flags', () => {
+testSuite.addTest('onMount initializes', () => {
   var el = L('div', { onMount: () => {} });
   assertTruthy(el._onMount);
-  assertTruthy(el._hasLifecycleInSubtree);
 });
 
-testSuite.addTest('onUnmount initializes and sets appropriate flags', () => {
+testSuite.addTest('onUnmount initializes', () => {
   var el = L('div', { onUnmount: () => {} });
   assertTruthy(el._onUnmount);
-  assertTruthy(el._hasLifecycleInSubtree);
 });
 
 testSuite.addTest('className prop recognized', () => {
