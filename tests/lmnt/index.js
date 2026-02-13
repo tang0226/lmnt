@@ -26,6 +26,11 @@ testSuite.addTest('Nested L call', () => {
   assertEqual(el.el.outerHTML, '<div><span>span text</span></div>')
 });
 
+testSuite.addTest('Multiple children passed in array', () => {
+  var el = L('div', [L('span'), L('p'), L('div')]);
+  assertEqual(el.el.outerHTML, '<div><span></span><p></p><div></div></div>');
+});
+
 testSuite.addTest('Empty div', () => {
   var el = L('div');
   assertEqual(el.el.outerHTML, '<div></div>')

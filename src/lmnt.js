@@ -6,7 +6,12 @@ const propAliases = {
 export function L(tag, props = {}, ...children) {
 
   // Treat props like an element / text node if applicable
-  if (props.el instanceof Node || props instanceof Node || typeof props == 'string') {
+  if (
+    props.el instanceof Node ||
+    props instanceof Node ||
+    typeof props == 'string' ||
+    Array.isArray(props)
+  ) {
     children.unshift(props);
     props = {};
   }
@@ -54,7 +59,14 @@ export function L(tag, props = {}, ...children) {
       el.appendChild(child);
     }
     else if (typeof child == 'object') {
-      el.appendChild(child.el);
+      if (Array.isArray(child)) {
+        for (const c of child) {
+          el.appendChild(c.el);
+        }
+      }
+      else {
+        el.appendChild(child.el);
+      }
     }
     else {
       el.appendChild(document.createTextNode(child));
