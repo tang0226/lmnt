@@ -88,12 +88,12 @@ mount(
 
     // testing a component render function
     L('button', { onClick: () => alert('hello world!') }, 'Hallo'),
-    ...[1,2,3].map((n) => L('div', {}, n.toString())),
+    [1,2,3].map((n) => L('div', {}, n.toString())),
 
     L('div', {}, 'counter function'),
     Counter(),
     Canvas(),
-    ...[1,2,3,4,5].map((n) => GoAway(n)),
+    [1,2,3,4,5].map((n) => GoAway(n)),
     GoAwayNested('outer', 'inner'),
     L('div', { onMount: () => { console.log("div mounted")} }),
   ),
