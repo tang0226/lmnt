@@ -107,7 +107,7 @@ export function mount(elObj, container) {
 }
 
 function runOnunmountCallbacks(elObj) {
-  // Run childrens' onUnmouns first
+  // Run children's onUnmount first
   for (const child of elObj.children || []) {
     runOnunmountCallbacks(child);
   }
