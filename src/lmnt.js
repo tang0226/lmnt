@@ -3,6 +3,34 @@ const propAliases = {
   'for': 'htmlFor',
 };
 
+function normalizeChild(child) {
+  if (child instanceof Node) {
+    return { el: child };
+  }
+
+  if (typeof child === 'string' || typeof child === 'number') {
+    return { el: document.createTextNode(child) };
+  }
+
+  // already an elObj
+  return child;
+}
+
+function normalizeChildren(children) {
+  const childList = [];
+  for (const child of children) {
+    if (Array.isArray(child)) {
+      for (const c of child) {
+        childList.push(normalizeChild(c));
+      }
+      continue;
+    }
+    childList.push(normalizeChild(child));
+  }
+
+  return childList;
+}
+
 export function L(tag, props = {}, ...children) {
 
   // Treat props like an element / text node if applicable
@@ -10,6 +38,7 @@ export function L(tag, props = {}, ...children) {
     props.el instanceof Node ||
     props instanceof Node ||
     typeof props == 'string' ||
+    typeof props == 'number' ||
     Array.isArray(props)
   ) {
     children.unshift(props);
@@ -28,6 +57,7 @@ export function L(tag, props = {}, ...children) {
     }
     else if (prop == 'onUnmount') {
       _onUnmount = val;
+
     }
     // Event listeners
     else if (prop.startsWith("on") && prop[2] === prop[2].toUpperCase()) {
@@ -54,23 +84,9 @@ export function L(tag, props = {}, ...children) {
     }
   }
 
+  children = normalizeChildren(children);
   for (const child of children) {
-    if (child instanceof Node) {
-      el.appendChild(child);
-    }
-    else if (typeof child == 'object') {
-      if (Array.isArray(child)) {
-        for (const c of child) {
-          el.appendChild(c.el);
-        }
-      }
-      else {
-        el.appendChild(child.el);
-      }
-    }
-    else {
-      el.appendChild(document.createTextNode(child));
-    }
+    el.appendChild(child.el);
   }
 
   return { tag, el, children, _onMount, _onUnmount };
