@@ -89,7 +89,7 @@ export function L(tag, props = {}, ...children) {
     el.appendChild(child.el);
   }
 
-  return { tag, el, children, _onMount, _onUnmount };
+  return { el, children, _onMount, _onUnmount };
 }
 
 
