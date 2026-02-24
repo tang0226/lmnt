@@ -3,74 +3,74 @@ const propAliases = {
   'for': 'htmlFor',
 };
 
-function normalizeChild(child) {
-  if (child instanceof Node) {
-    return { el: child };
-  }
-
-  if (typeof child === 'string' || typeof child === 'number') {
-    return { el: document.createTextNode(child) };
-  }
-
-  // already an elObj
-  return child;
-}
-
-function normalizeChildren(children) {
-  const childList = [];
-  for (const child of children) {
-    if (Array.isArray(child)) {
-      for (const c of child) {
-        childList.push(normalizeChild(c));
-      }
-      continue;
-    }
-    childList.push(normalizeChild(child));
-  }
-
-  return childList;
-}
-
-export function L(tag, props = {}, ...children) {
-
-  // Treat props like an element / text node if applicable
+// virtual node creator
+// children are other vnodes, strings, or numbers
+export function V(type, props = {}, ...children) {
+  // Treat `props` as another child if applicable
   if (
-    props.el instanceof Node ||
-    props instanceof Node ||
-    typeof props == 'string' ||
-    typeof props == 'number' ||
+    props.type || // vnode
+    typeof props === 'string' ||
+    typeof props === 'number' ||
     Array.isArray(props)
   ) {
     children.unshift(props);
     props = {};
   }
-  
-  const el = document.createElement(tag);
-  var _onMount, _onUnmount;
 
+  const childList = [];
+  for (const child of children) {
+    if (Array.isArray(child)) {
+      for (const c of child) {
+        childList.push(c);
+      }
+    }
+    else {
+      childList.push(child);
+    }
+  }
+
+  return {
+    type,
+    props,
+    children: childList,
+    _onCreate: props.onCreate,
+  };
+}
+
+// Returns a new object that contains a newly created DOM element
+export function L(vnode) {
+  if (typeof vnode === 'string' || typeof vnode === 'number') {
+    return { el: document.createTextNode(vnode) };
+  }
+
+  const el = document.createElement(vnode.type);
+  const props = vnode.props;
+
+  // Props
+  var _onMount, _onUnmount;
+  var events = {};
   for (const prop of Object.keys(props)) {
     const val = props[prop];
 
     // Basic lifecycle functions
-    if (prop == 'onMount') {
+    if (prop === 'onMount') {
       _onMount = val;
     }
-    else if (prop == 'onUnmount') {
+    else if (prop === 'onUnmount') {
       _onUnmount = val;
-
     }
     // Event listeners
     else if (prop.startsWith("on") && prop[2] === prop[2].toUpperCase()) {
-      el.addEventListener(prop.slice(2).toLowerCase(), val);
+      events[prop.slice(2).toLowerCase()] = val;
     }
     // Style
-    else if (prop == 'style') {
-      if (typeof val == 'object') {
+    else if (prop === 'style') {
+      if (typeof val === 'object') {
         for (const cssProp of Object.keys(val)) {
           el.style[cssProp] = val[cssProp];
         }
       }
-      if (typeof val == 'string') {
+      if (typeof val === 'string') {
         el.style.cssText = val;
       }
     }
@@ -84,18 +84,43 @@ export function L(tag, props = {}, ...children) {
     }
   }
 
-  children = normalizeChildren(children);
-  for (const child of children) {
-    el.appendChild(child.el);
+  // Children
+  const children = [];
+  for (const child of vnode.children) {
+    if (typeof child === 'string' || typeof child === 'number') {
+      const tn = document.createTextNode(child);
+      children.push(tn);
+      el.appendChild(tn);
+    }
+    else {
+      const childL = L(child);
+      children.push(childL);
+      el.appendChild(childL.el);
+    }
   }
 
-  return { el, children, _onMount, _onUnmount };
+  var self = { el, children, _onMount, _onUnmount };
+  
+  // onCreate lifecycle
+  if (typeof vnode._onCreate === 'function') {
+    vnode._onCreate(self);
+  }
+
+  // Pass self as context to event listeners, since they are often defined
+  // in V (on the vnode level, not the DOM element (L) level)
+  for (const eName of Object.keys(events)) {
+    self.el.addEventListener(eName, (e) => {
+      events[eName](e, self);
+    });
+  }
+
+  return self;
 }
 
 
 function runOnmountCallbacks(elObj) {
   // Run parent's onMount first
-  elObj._onMount?.();
+  elObj._onMount?.(elObj);
   for (const child of elObj.children || []) {
     runOnmountCallbacks(child);
   }
@@ -111,7 +136,7 @@ function runOnunmountCallbacks(elObj) {
   for (const child of elObj.children || []) {
     runOnunmountCallbacks(child);
   }
-  elObj._onUnmount?.();
+  elObj._onUnmount?.(elObj);
 }
 
 export function unmount(elObj) {

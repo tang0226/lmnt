@@ -1,4 +1,4 @@
-import { L, mount, unmount } from '../../../src/lmnt.js';
+import { V, L, mount, unmount } from '../../../src/lmnt.js';
 import {
   assert,
   assertEqual,
