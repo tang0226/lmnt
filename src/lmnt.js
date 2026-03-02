@@ -3,18 +3,49 @@ const propAliases = {
   'for': 'htmlFor',
 };
 
+function composeHooks(outerHooks, innerHooks) {
+  const result = { ...innerHooks };
+
+  for (const key of Object.keys(outerHooks)) {
+    const outer = outerHooks[key];
+    const inner = innerHooks[key];
+    if (outer && inner) {
+      result[key] = (self) => {
+        inner(self);
+        outer(self);
+      };
+    }
+    else if (outer) {
+      result[key] = outer;
+    }
+  }
+  return result;
+}
+
 // virtual node creator
 // children are other vnodes, strings, or numbers
 export function V(type, props = {}, ...children) {
   // Treat `props` as another child if applicable
   if (
-    props.type || // vnode
+    props._isVnode ||
     typeof props === 'string' ||
     typeof props === 'number' ||
     Array.isArray(props)
   ) {
     children.unshift(props);
     props = {};
+  }
+
+  // Split between props and hooks
+  const hooks = {};
+  const cleanProps = {};
+  for (const [prop, val] of Object.entries(props)) {
+    if (prop[0] === '$') {
+      hooks[prop.slice(1)] = val;
+    }
+    else {
+      cleanProps[prop] = val;
+    }
   }
 
   const childList = [];
@@ -31,9 +62,10 @@ export function V(type, props = {}, ...children) {
 
   return {
     type,
-    props,
+    props: cleanProps,
+    hooks,
     children: childList,
-    _onCreate: props.onCreate,
+    _isVnode: true,
   };
 }
 
@@ -43,24 +75,19 @@ export function L(vnode) {
     return { el: document.createTextNode(vnode) };
   }
 
-  const el = document.createElement(vnode.type);
-  const props = vnode.props;
+  // Unwrap component functions
+  while (typeof vnode.type === 'function') {
+    const nextVnode = vnode.type({ ...vnode.props, children: vnode.children });
+    nextVnode.hooks = composeHooks(vnode.hooks, nextVnode.hooks);
+    vnode = nextVnode;
+  }
+
+  const el = document.createElement(vnode.type);  
 
   // Props
-  var _onMount, _onUnmount;
   var events = {};
-  for (const prop of Object.keys(props)) {
-    const val = props[prop];
-
-    // Basic lifecycle functions
-    if (prop === 'onMount') {
-      _onMount = val;
-    }
-    else if (prop === 'onUnmount') {
-      _onUnmount = val;
-    }
-    // Event listeners
-    else if (prop.startsWith("on") && prop[2] === prop[2].toUpperCase()) {
+  for (const [prop, val] of Object.entries(vnode.props)) {
+    if (prop.startsWith("on") && prop[2] === prop[2].toUpperCase()) {
       events[prop.slice(2).toLowerCase()] = val;
     }
     // Style
@@ -84,6 +111,7 @@ export function L(vnode) {
     }
   }
 
+
   // Children
   const children = [];
   for (const child of vnode.children) {
@@ -99,47 +127,61 @@ export function L(vnode) {
     }
   }
 
-  var self = { el, children, _onMount, _onUnmount };
-  
-  // onCreate lifecycle
-  if (typeof vnode._onCreate === 'function') {
-    vnode._onCreate(self);
-  }
+  const self = {
+    el,
+    props: vnode.props,
+    hooks: vnode.hooks || {},
+    children: children,
+  };
 
   // Pass self as context to event listeners, since they are often defined
   // in V (on the vnode level, not the DOM element (L) level)
+  self.events = {};
   for (const eName of Object.keys(events)) {
-    self.el.addEventListener(eName, (e) => {
+    const callback = (e) => {
       events[eName](e, self);
-    });
+    }
+    self.el.addEventListener(eName, callback);
+    self.events[eName] = callback;
   }
+  
+  // onCreate lifecycle (after child L calls = bottom-up)
+  vnode.hooks.onCreate?.(self);
 
   return self;
 }
 
 
-function runOnmountCallbacks(elObj) {
-  // Run parent's onMount first
-  elObj._onMount?.(elObj);
+function runMountLifecycle(elObj) {
+  // Run children's onMount first (bottom-up)
   for (const child of elObj.children || []) {
-    runOnmountCallbacks(child);
+    if (child.el) {
+      runMountLifecycle(child);
+    }
   }
+  elObj.hooks.onMount?.(elObj);
 }
 
 export function mount(elObj, container) {
   container.appendChild(elObj.el);
-  runOnmountCallbacks(elObj);
+  runMountLifecycle(elObj);
 }
 
-function runOnunmountCallbacks(elObj) {
-  // Run children's onUnmount first
+function runUnmountLifecycle(elObj) {
+  // Run children's onUnmount first (bottom-up)
   for (const child of elObj.children || []) {
-    runOnunmountCallbacks(child);
+    if (child.el) {
+      runUnmountLifecycle(child);
+    }
   }
-  elObj._onUnmount?.(elObj);
+  elObj.hooks.onUnmount?.(elObj);
+
+  for (const [event, callback] of Object.entries(elObj.events)) {
+    elObj.el.removeEventListener(event, callback);
+  }
 }
 
 export function unmount(elObj) {
-  runOnunmountCallbacks(elObj);
+  runUnmountLifecycle(elObj);
   elObj.el.remove();
 }

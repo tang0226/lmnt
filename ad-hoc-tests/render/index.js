@@ -19,10 +19,10 @@ const reducer = (state, action) => {
 
 const st = createStore(reducer, { val: 0, incr: 1 });
 
-function Counter(store) {
+function Counter({ store }) {
   return V('div',
     {
-      onCreate(self) {
+      $onCreate(self) {
         const div = self.el.querySelector('#counter-val');
         withRender(self, store, {
           select: (s) => s.val,
@@ -36,10 +36,10 @@ function Counter(store) {
   );
 }
 
-function MetaCounter(store) {
+function MetaCounter({ store }) {
   return V('div',
     {
-      onCreate(self) {
+      $onCreate(self) {
         const div = self.el.querySelector('#incr-val');
         withRender(self, store, {
           select: (s) => s.incr,
@@ -53,4 +53,4 @@ function MetaCounter(store) {
   );
 }
 
-mount(L(V('div', Counter(st), MetaCounter(st))), document.body);
+mount(L(V('div', V(Counter, { store: st }), V(MetaCounter, { store: st }))), document.body);

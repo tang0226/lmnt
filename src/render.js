@@ -15,10 +15,10 @@ export function withRender(
   let unsubscribe;
   
   // Combine with any current onMount function on the elObj
-  let prevMount = elObj._onMount;
+  let prevMount = elObj.hooks.onMount;
 
-  elObj._onMount = () => {
-    prevMount?.();
+  elObj.hooks.onMount = (self) => {
+    prevMount?.(self);
 
     prev = select(store.getState());
 
@@ -33,9 +33,9 @@ export function withRender(
   }
 
   // Combine with current onUnmount function
-  let prevUnmount = elObj._onUnmount;
-  elObj._onUnmount = () => {
+  let prevUnmount = elObj.hooks.onUnmount;
+  elObj.hooks.onUnmount = (self) => {
     unsubscribe?.();
-    prevUnmount?.();
+    prevUnmount?.(self);
   };
 }
