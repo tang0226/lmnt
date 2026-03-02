@@ -4,48 +4,98 @@ One of my attempts to build a scalable UI framework from scratch in vanilla JS.
 
 To import:
 ```javascript
-// L, mount, unmount
-import { L, mount, unmount } from '<path-to-lmnt>/src/lmnt.js';
-// createStore
+import { V, L, mount, unmount } from '<path-to-lmnt>/src/lmnt.js';
+// createStore for centralized state management
 import { createStore } from '<path-to-lmnt>/src/store.js';
 ```
 
 ## Guide:
-### `L(tag, [props], ...children)`
+### `V(type, [props], ...children)`
+Creates a new virtual node
 Shorthand imitation of [`React.createElement()`](https://react.dev/reference/react/createElement)
-Children can be text, HTML elements, or another `L` call.
-`L` returns an object that contains the HTML element, references to the element's children, and `onMount` or `onUnmount` events passed as element props (see `mount()` and `unmount()`).
+`type`: can be either the tag name or a component function that receives props and/or children
+`props`: the optional props parameter. Props can be:
+* HTML attributes (e.g. `id`, `class`, `style`)
+* event listeners (camel-cased names, e.g. `onClick`, `onLoad`)
+* lifecycle hooks, prefixed with `$`: `$onCreate`, `$onMount`, `$onUnmount`
+
+`children` can be an array of (arrays of) primitives or other v-nodes.
+`V()` returns a v-node object that wraps the node type, props, and children in a single 
 
 ```javascript
-var { el } = L('div', { style: { 'color': 'red' } },
-  'Here, have some...',
-  document.createElement('hr'),
-  L('i', 'italic text!'),
+var vnode = V('div',
+  {
+    style: { 'color': 'red' },
+    $onMount: () => { console.log('mounted') },
+  },
+  'Top',
+  V('hr'),
+  V('span', { style: { 'background': 'lightgray' } }, 'bottom'),
 );
+console.log(vnode);
+/**
+{
+  type: 'div',
+  hooks: { onMount: () => { console.log('mounted') } },
+  props: { style: { color: 'red' } },
+  children: ['Top', vnodeObj, vnodeObj],
+  _isVnode: true,
+}
+*/
 ```
 
+### `L(vnode)`
+Creates a new DOM element based on a given v-node and wraps it in an object containing children objects, hooks, and props. Also executes `onCreate` hooks of the v-node and its descendants (bottom-up).
+```javascript
+var vnode = V('div',
+  'With ',
+  V('i', 'italic'),
+  ' and ',
+  V('b', 'bold'),
+  ' text',
+);
+var elObj = L(vnode);
+console.log(elObj);
+/** 
+{
+  el: div (DOM element),
+  events: {},
+  hooks: {},
+  props: {},
+  children: [TextNode, elObj, TextNode, elObj, TextNode],
+}
+*/
+```
+
+### Hooks
+Hooks are defined under a `V()` call, and they often need to reference a (future) L-object's DOM element via the `el` prop for manual rendering. To allow this, all hooks receive the relevant L-object as a parameter (often named `self`). Hooks execute starting from the bottom of the tree so that child L-objects are initialized / cleaned up before their parents.
+`$onCreate`: called when a v-node is realized into an L-object using the `L` function
+`$onMount`: called when `mount()` is called on an L-object
+`$onUnmount`: called when `unmount()` is called on an L-object
+
 ### `mount(elObj, container)`
-`mount` appends an element as a child to a container and executes `onMount` lifecycle functions.
-`elObj`: An element object returned by `L()`. `mount()` will execute any `onMount` props attached to the object or any of its child element objects.
+Appends the DOM element of an L-object as a child to a container, executing the `onMount` hooks of the L-object and its descendants (bottom-up).
+`elObj`: An L-object returned by `L()`
 
 ```javascript
 var hasMounted = false;
 mount(
-  L('div', { onMount() {hasMounted = true} }),
-  document.createElement('div')
+  L(V('div', { $onMount() { hasMounted = true } })),
+  document.createElement('div'),
 );
 console.log(hasMounted); // true
 ```
 
 ### `unmount(elObj)`
-`unmount` unmounts an element object, removing its HTML element from the DOM and executing `onUnmount` functions attached to the object and its children.
+Unmounts an L-object, removing the DOM element and executing the `onUnmount` hooks of the L-object and its descendants (bottom-up).
+`elObj`: A previously-mounted L-object returned by `L()`
 
 ```javascript
-var elToUnmount, hasUnmounted = false;
+var elObjToUnmount, hasUnmounted = false;
 mount(
-  elToUnmount = L('div', { onUnmount() { hasUnmounted = true } }),
+  elObjToUnmount = L(V('div', { $onUnmount() { hasUnmounted = true } })),
   document.createElement('div')
 );
-unmount(elToUnmount);
+unmount(elObjToUnmount);
 console.log(hasUnmounted); // true
 ```
