@@ -28,7 +28,7 @@ function Canvas() {
     width: 400,
     height: 400,
     style: 'border: 1px solid black',
-    onMount: (self) => {
+    $onMount: (self) => {
       ctx = self.el.getContext('2d');
       ctx.fillStyle = '#000';
       ctx.fillRect(10, 10, 50, 50);
@@ -44,9 +44,9 @@ function Canvas() {
 
 function GoAway(content) {
   var v = V('div', {
-    onMount: (self) => { console.log(content + ' mounted') },
+    $onMount: (self) => { console.log(content + ' mounted') },
     onClick: (e, self) => { unmount(self) },
-    onUnmount: (self) => { console.log(content + ' unmounted') },
+    $onUnmount: (self) => { console.log(content + ' unmounted') },
   }, content);
   return v;
 }
@@ -57,14 +57,14 @@ function GoAwayNested(content1, content2) {
     {
       onMount: () => { console.log(content1 + ' mounted') },
       onClick: (e, self) => { unmount(self) },
-      onUnmount: () => { console.log(content1 + ' unmounted') },
+      $onUnmount: () => { console.log(content1 + ' unmounted') },
     },
     content1,
     V(
       'span',
       {
-        onMount: () => { console.log(`${content1}:${content2} mounted`) },
-        onUnmount: () => { console.log(`${content1}:${content2} unmounted`) },
+        $onMount: () => { console.log(`${content1}:${content2} mounted`) },
+        $onUnmount: () => { console.log(`${content1}:${content2} unmounted`) },
       },
       ' ' + content2
     )
@@ -98,3 +98,26 @@ var a = L(V('div', { style: { 'background': '#EEE', 'font-family': 'sans-serif' 
 console.log(a);
 
 mount(a, document.body);
+
+
+var vnode = V('div',
+  {
+    style: { 'color': 'red' },
+    $onMount: () => { console.log('mounted') },
+  },
+  'Top',
+  V('hr'),
+  V('span', { style: { 'background': 'lightgray' } }, 'bottom'),
+);
+console.log(vnode);
+
+
+var vnode = V('div',
+  'With ',
+  V('i', 'italic'),
+  ' and ',
+  V('b', 'bold'),
+  ' text',
+);
+var elObj = L(vnode);
+console.log(elObj);
