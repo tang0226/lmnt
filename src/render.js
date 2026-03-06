@@ -11,29 +11,19 @@ export function withRender(
   } = {}
 ) {
 
-  let prev;
-  let unsubscribe;
+  let prev = select(store.getState());
   
-  // Combine with any current onMount function on the elObj
-  let prevMount = elObj.hooks.onMount;
+  const unsubscribe = store.subscribe((state, action) => {
+    const next = select(state);
 
-  elObj.hooks.onMount = (self) => {
-    prevMount?.(self);
+    if (shouldRender(next, prev, action)) {
+      render(next, prev, action);
+      prev = next;
+    }
+  });
 
-    prev = select(store.getState());
-
-    unsubscribe = store.subscribe((state, action) => {
-      const next = select(state);
-
-      if (shouldRender(next, prev, action)) {
-        render(next, prev, action);
-        prev = next;
-      }
-    });
-  }
-
-  // Combine with current onUnmount function
-  let prevUnmount = elObj.hooks.onUnmount;
+  // Add unsubscribe call to unmount callback
+  const prevUnmount = elObj.hooks.onUnmount;
   elObj.hooks.onUnmount = (self) => {
     unsubscribe?.();
     prevUnmount?.(self);
