@@ -26,7 +26,7 @@ function Counter({ store }) {
         const div = self.el.querySelector('#counter-val');
         withRender(self, store, {
           select: (s) => s.val,
-          render: (next, prev, action) => { div.innerText = next },
+          render: ({ next }) => { div.innerText = next },
         });
       }
     },
@@ -43,7 +43,7 @@ function MetaCounter({ store }) {
         const div = self.el.querySelector('#incr-val');
         withRender(self, store, {
           select: (s) => s.incr,
-          render: (next, prev, action) => { div.innerText = next },
+          render: ({ next }) => { div.innerText = next },
         });
       }
     },

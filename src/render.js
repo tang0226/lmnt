@@ -5,7 +5,7 @@ export function withRender(
   store,
   {
     select = s => s,
-    shouldRender = (next, prev, action) =>
+    shouldRender = ({ next, prev, action }) =>
       prev !== next,
     render
   } = {}
@@ -16,8 +16,8 @@ export function withRender(
   const unsubscribe = store.subscribe((state, action) => {
     const next = select(state);
 
-    if (shouldRender(next, prev, action)) {
-      render(next, prev, action);
+    if (shouldRender({ next, prev, action })) {
+      render({ next, prev, action });
       prev = next;
     }
   });
