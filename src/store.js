@@ -1,17 +1,14 @@
 // Simple Redux imitation (based on the Redux website)
 export function createStore(reducer, initialState) {
 
-  const listeners = [];
+  const listeners = new Set();
   const subscribe = (listener) => {
-    listeners.push(listener);
+    listeners.add(listener);
     // Unsubscribe function
-    return function unsubscribe() {
-      const i = listeners.indexOf(listener);
-      if (i >= 0) listeners.splice(i, 1);
-    };
+    return () => listeners.delete(listener);
   }
 
-  var state;
+  let state;
   const getState = () => state;
 
   // single reducer
