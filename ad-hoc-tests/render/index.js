@@ -1,6 +1,5 @@
 import { V, L, mount, unmount } from '../../src/lmnt.js';
-import { createStore } from "../../src/store.js";
-import { withRender } from "../../src/render.js";
+import { createStore, withStore } from "../../src/store.js";
 
 
 const reducer = (state, action) => {
@@ -24,7 +23,7 @@ function Counter({ store }) {
     {
       $onCreate(self) {
         const div = self.el.querySelector('#counter-val');
-        withRender(self, store, {
+        withStore(self, store, {
           select: (s) => s.val,
           render: ({ next }) => { div.innerText = next },
         });
@@ -41,7 +40,7 @@ function MetaCounter({ store }) {
     {
       $onCreate(self) {
         const div = self.el.querySelector('#incr-val');
-        withRender(self, store, {
+        withStore(self, store, {
           select: (s) => s.incr,
           render: ({ next }) => { div.innerText = next },
         });
