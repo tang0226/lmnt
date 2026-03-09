@@ -66,7 +66,7 @@ export function withStore(
 
   let prev = select(store.getState());
   
-  const unsubscribe = store.subscribe((state, action) => {
+  const unsub = store.subscribe((state, action) => {
     const next = select(state);
 
     if (shouldRender({ next, prev, action })) {
@@ -76,9 +76,5 @@ export function withStore(
   });
 
   // Add unsubscribe call to unmount callback
-  const prevUnmount = elObj.hooks.onUnmount;
-  elObj.hooks.onUnmount = (self) => {
-    unsubscribe?.();
-    prevUnmount?.(self);
-  };
+  (elObj.hooks.onUnmount ||= []).push(unsub);
 }

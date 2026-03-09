@@ -55,7 +55,7 @@ function GoAwayNested(content1, content2) {
   var v = V(
     'div',
     {
-      onMount: () => { console.log(content1 + ' mounted') },
+      $onMount: () => { console.log(content1 + ' mounted') },
       onClick: (e, self) => { unmount(self) },
       $onUnmount: () => { console.log(content1 + ' unmounted') },
     },

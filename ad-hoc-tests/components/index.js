@@ -54,5 +54,6 @@ var vnode = V(Wrapper,
 var elObj = L(vnode);
 
 // All lifecycle functions triggered by `mount` and `unmount` should execute inside-first (bottom-up)
-mount(elObj, document.body)
+mount(elObj, document.body);
 console.log("Mounting done. Unmounting element...");
+unmount(elObj, document.body);

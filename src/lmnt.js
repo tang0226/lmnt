@@ -4,22 +4,22 @@ const propAliases = {
 };
 
 function composeHooks(outerHooks, innerHooks) {
-  const result = { ...innerHooks };
+  const res = {};
+  for (const [hook, fns] of Object.entries(innerHooks)) {
+    res[hook] = [...fns];
+  }
 
-  for (const key of Object.keys(outerHooks)) {
-    const outer = outerHooks[key];
-    const inner = innerHooks[key];
-    if (outer && inner) {
-      result[key] = (self) => {
-        inner(self);
-        outer(self);
-      };
+  for (const [hook, fns] of Object.entries(outerHooks)) {
+    if (res[hook]) {
+      // Combine, putting inner hooks first
+      res[hook] = [...res[hook], ...fns];
     }
-    else if (outer) {
-      result[key] = outer;
+    else {
+      res[hook] = [...fns];
     }
   }
-  return result;
+
+  return res;
 }
 
 // virtual node creator
@@ -41,7 +41,7 @@ export function V(type, props = {}, ...children) {
   const cleanProps = {};
   for (const [prop, val] of Object.entries(props)) {
     if (prop[0] === '$') {
-      hooks[prop.slice(1)] = val;
+      hooks[prop.slice(1)] = [val];
     }
     else {
       cleanProps[prop] = val;
@@ -85,7 +85,7 @@ export function L(vnode) {
   const el = document.createElement(vnode.type);  
 
   // Props
-  var events = {};
+  const events = {};
   for (const [prop, val] of Object.entries(vnode.props)) {
     if (prop.startsWith("on") && prop[2] === prop[2].toUpperCase()) {
       events[prop.slice(2).toLowerCase()] = val;
@@ -111,27 +111,13 @@ export function L(vnode) {
     }
   }
 
-
-  // Children
   const children = [];
-  for (const child of vnode.children) {
-    if (typeof child === 'string' || typeof child === 'number') {
-      const tn = document.createTextNode(child);
-      children.push(tn);
-      el.appendChild(tn);
-    }
-    else {
-      const childL = L(child);
-      children.push(childL);
-      el.appendChild(childL.el);
-    }
-  }
 
   const self = {
     el,
     props: vnode.props,
     hooks: vnode.hooks || {},
-    children: children,
+    children,
   };
 
   // Pass self as context to event listeners, since they are often defined
@@ -144,9 +130,22 @@ export function L(vnode) {
     self.el.addEventListener(eName, callback);
     self.events[eName] = callback;
   }
+
+  for (const child of vnode.children) {
+    if (typeof child === 'string' || typeof child === 'number') {
+      const tn = document.createTextNode(child);
+      children.push(tn);
+      el.appendChild(tn);
+    }
+    else {
+      const childL = L(child);
+      children.push(childL);
+      el.appendChild(childL.el);
+    }
+  }
   
   // onCreate lifecycle (after child L calls = bottom-up)
-  vnode.hooks.onCreate?.(self);
+  (vnode.hooks.onCreate || []).forEach(fn => { fn(self) });
 
   return self;
 }
@@ -159,7 +158,7 @@ function runMountLifecycle(elObj) {
       runMountLifecycle(child);
     }
   }
-  elObj.hooks.onMount?.(elObj);
+  (elObj.hooks.onMount || []).forEach(fn => { fn(elObj) });
 }
 
 export function mount(elObj, container) {
@@ -174,7 +173,7 @@ function runUnmountLifecycle(elObj) {
       runUnmountLifecycle(child);
     }
   }
-  elObj.hooks.onUnmount?.(elObj);
+  (elObj.hooks.onUnmount || []).forEach(fn => { fn(elObj) });
 
   for (const [event, callback] of Object.entries(elObj.events)) {
     elObj.el.removeEventListener(event, callback);
