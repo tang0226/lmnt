@@ -145,7 +145,7 @@ export function L(vnode) {
   }
   
   // onCreate lifecycle (after child L calls = bottom-up)
-  (vnode.hooks.onCreate || []).forEach(fn => { fn(self) });
+  vnode.hooks.onCreate?.forEach(fn => { fn(self) });
 
   return self;
 }
@@ -158,7 +158,7 @@ function runMountLifecycle(elObj) {
       runMountLifecycle(child);
     }
   }
-  (elObj.hooks.onMount || []).forEach(fn => { fn(elObj) });
+  elObj.hooks.onMount?.forEach(fn => { fn(elObj) });
 }
 
 export function mount(elObj, container) {
@@ -173,7 +173,7 @@ function runUnmountLifecycle(elObj) {
       runUnmountLifecycle(child);
     }
   }
-  (elObj.hooks.onUnmount || []).forEach(fn => { fn(elObj) });
+  elObj.hooks.onUnmount?.forEach(fn => { fn(elObj) });
 
   for (const [event, callback] of Object.entries(elObj.events)) {
     elObj.el.removeEventListener(event, callback);
