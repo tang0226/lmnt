@@ -14,108 +14,324 @@ import {
 } from '../../test-framework/assert.js';
 import { TestSuite } from '../../test-framework/test-suite.js';
 
-const testSuite = new TestSuite('L');
+const vTest = new TestSuite('V');
 
-testSuite.addTest('Single div with text', () => {
-  var el = L('div', 'Hello world!');
-  assertEqual(el.el.tagName, 'DIV');
+vTest.addTest('creates a vnode with type, props, and children', () => {
+  const vnode = V('div', { id: 'div-id' }, 'hello world');
+
+  assertEqual(vnode.type, 'div');
+  assertDeepEqual(vnode.props, { id: 'div-id' });
+  assertDeepEqual(vnode.children, ['hello world']);
+  assertEqual(vnode._isVnode, true);
 });
 
-testSuite.addTest('Nested L call', () => {
-  var el = L('div', L('span', 'span text'));
-  assertEqual(el.el.outerHTML, '<div><span>span text</span></div>')
+vTest.addTest('extracts `$` hook props into `hooks`', () => {
+  const fn = () => {};
+  const vnode = V('div', { $onCreate: fn, id: 'div-id' });
+  assertDeepEqual(vnode.hooks.onCreate, [fn]);
+  assertDeepEqual(vnode.props, { id: 'div-id' });
 });
 
-testSuite.addTest('Multiple children passed in array', () => {
-  var el = L('div', [L('span'), L('p'), L('div')]);
-  assertEqual(el.el.outerHTML, '<div><span></span><p></p><div></div></div>');
+vTest.addTest('stores multiple hook types', () => {
+  const c = () => {};
+  const m = () => {};
+
+  const vnode = V('div', {
+    $onCreate: c,
+    $onMount: m,
+  });
+
+  assertDeepEqual(vnode.hooks.onCreate, [c]);
+  assertDeepEqual(vnode.hooks.onMount, [m]);
 });
 
-testSuite.addTest('Empty div', () => {
-  var el = L('div');
-  assertEqual(el.el.outerHTML, '<div></div>')
+vTest.addTest('props treated as child when props is a primitive', () => {
+  let vnode = V('div', 'hello world');
+
+  assertDeepEqual(vnode.props, {});
+  assertDeepEqual(vnode.children, ['hello world']);
+
+  vnode = V('div', 0);
+  assertDeepEqual(vnode.props, {});
+  assertDeepEqual(vnode.children, [0]);
 });
 
-testSuite.addTest('Style attribute from string', () => {
-  var el = L('div', { style: 'background-color: red; font-family: sans-serif' });
-  assertEqual(el.el.style['background-color'], 'red');
-  assertEqual(el.el.style['font-family'], 'sans-serif');
+vTest.addTest('treats vnode props as child', () => {
+  const child = V('div');
+  const vnode = V('div', child);
+
+  assertDeepEqual(vnode.children, [child]);
 });
 
-testSuite.addTest('Style attribute from object (hyphenated props)', () => {
-  var el = L('div', { style: { 'background-color': 'red', 'font-family': 'sans-serif'} });
-  assertEqual(el.el.style.backgroundColor, 'red');
-  assertEqual(el.el.style.fontFamily, 'sans-serif');
+vTest.addTest('accepts multiple children', () => {
+  const vnode = V('div', 'c1', 'c2', 3);
+  assertDeepEqual(vnode.children, ['c1', 'c2', 3]);
 });
 
-testSuite.addTest('Style attribute from object (camelCase props)', () => {
-  var el = L('div', { style: { backgroundColor: 'red', fontFamily: 'sans-serif'} });
-  assertEqual(el.el.style.backgroundColor, 'red');
-  assertEqual(el.el.style.fontFamily, 'sans-serif');
+vTest.addTest('flattens child arrays', () => {
+  const vnode = V('div', {}, ['a', 'b'], ['c', 'd']);
+  assertDeepEqual(vnode.children, ['a', 'b', 'c', 'd']);
 });
 
-testSuite.addTest('onMount initializes', () => {
-  var el = L('div', { onMount: () => {} });
-  assertTruthy(el._onMount);
+vTest.addTest('treats props array as array of children', () => {
+  const vnode = V('div', ['a', 'b'], ['c', 'd']);
+  assertDeepEqual(vnode.children, ['a', 'b', 'c', 'd']);
 });
 
-testSuite.addTest('onUnmount initializes', () => {
-  var el = L('div', { onUnmount: () => {} });
-  assertTruthy(el._onUnmount);
+vTest.addTest('creates empty hooks when none are provided', () => {
+  const vnode = V('div', { id: 'div-id' });
+  assertDeepEqual(vnode.hooks, {});
 });
 
-testSuite.addTest('className prop recognized', () => {
-  var el = L('div', { id: 'test-div', className: 'test-class test-class-2' }, "test text");
-  assertTruthy(el.el.classList.contains('test-class'));
-  assertTruthy(el.el.classList.contains('test-class-2'));
+vTest.runTests();
+
+const lTest = new TestSuite('L');
+
+lTest.addTest('creates DOM element', () => {
+  const l = L(V('div'));
+  assert(l.el instanceof HTMLElement);
+  assertEqual(l.el.tagName, 'DIV');
 });
 
-testSuite.addTest('class -> className alias', () => {
-  var el = L('div', { id: 'test-div', class: 'test-class test-class-2' }, "test text");
-  assertTruthy(el.el.classList.contains('test-class'));
-  assertTruthy(el.el.classList.contains('test-class-2'));
+lTest.addTest('creates text node for string vnode', () => {
+  const l = L('hello');
+
+  assertEqual(l.el.nodeType, Node.TEXT_NODE);
+  assertEqual(l.el.textContent, 'hello');
 });
 
-testSuite.addTest('htmlFor prop recognized', () => {
-  var el = L('label', { htmlFor: 'test' }, "test text");
-  assertEqual(el.el.htmlFor, 'test');
+lTest.addTest('applies props to element', () => {
+  const l = L(V('input', { type: 'text', 'value': 'hello' }));
+  assertEqual(l.el.type, 'text');
+  assertEqual(l.el.value, 'hello');
 });
 
-testSuite.addTest('for -> htmlFor alias', () => {
-  var el = L('label', { for: 'test' }, "test text");
-  assertEqual(el.el.htmlFor, 'test');
+lTest.addTest('maps `class` to `className', () => {
+  const l = L(V('div', { class: 'class-name' }));
+  assertEqual(l.el.className, 'class-name');
 });
 
-testSuite.addTest('Multiple nested children', () => {
-  var el = L('div', { id: 'outer-div' },
-    "Hello world!",
-    L('br'),
-    L('hr'),
-    L('p',
-      'Here is some ',
-      L('b', 'bolded text '),
-      'and some ',
-      L('i', 'italic text'),
-      '.'
+lTest.addTest('maps `for` to `htmlFor', () => {
+  const l = L(V('div', { for: 'id' }));
+  assertEqual(l.el.htmlFor, 'id');
+});
+
+lTest.addTest('applies style object', () => {
+  const l = L(V('div', { style: { color: 'red' } }));
+  assertEqual(l.el.style.color, 'red');
+});
+
+lTest.addTest('applies style string', () => {
+  const l = L(V('div', { style: 'color: red; background: blue' }));
+  assertEqual(l.el.style.color, 'red');
+  assertEqual(l.el.style.background, 'blue');
+});
+
+lTest.addTest('creates child DOM nodes', () => {
+  const l = L(
+    V('div', {},
+      V('span'),
+      V('p')
     )
   );
-  assertEqual(el.el.outerHTML, '<div id="outer-div">Hello world!<br><hr><p>Here is some <b>bolded text </b>and some <i>italic text</i>.</p></div>');
+  assertEqual(l.el.children.length, 2);
 });
 
-testSuite.addTest('Event on div', () => {
-  var val = false;
-  var el = L('div', { onclick: () => val = true });
-  el.el.click();
-  assertTruthy(val);
+lTest.addTest('creates text children', () => {
+  const l = L(
+    V('div', {}, 'hello', ' world!'),
+  );
+
+  assertEqual(l.el.textContent, 'hello world!');
 });
 
-testSuite.runTests();
+lTest.addTest('unwraps component function', () => {
+  function Comp() {
+    return V('div', { id: 'test'});
+  }
+  const l = L(V(Comp))
+
+  assertEqual(l.el.id, 'test');
+});
+
+lTest.addTest('unwraps multiple component functions', () => {
+  function Inner({ children }) {
+    return V('div', children, '!');
+  }
+  function Outer({ children }) {
+    return V(Inner, 'Hello, ', children);
+  }
+
+  const l = L(V(Outer, 'John'));
+  
+  assertEqual(l.el.textContent, 'Hello, John!');
+});
+
+lTest.addTest('passes props to component function', () => {
+  function Comp({ children, ...props } = {}) {
+    return V('div', props, 'Hello');
+  }
+
+  const l = L(V(Comp, { id: 'comp-id' }));
+
+  assertEqual(l.el.id, 'comp-id');
+});
+
+lTest.addTest('passes children to component function', () => {
+  function Comp({ children} = {}) {
+    return V('div', 'Hello, ', children);
+  }
+
+  const l = L(V(Comp, 'John', ' Doe'));
+
+  assertEqual(l.el.textContent, 'Hello, John Doe');
+});
+
+lTest.addTest('attaches event listeners', () => {
+  let called = false;
+  const l = L(V('button', {
+    onClick: () => { called = true }
+  }));
+
+  l.el.click();
+
+  assert(called);
+});
+
+lTest.addTest('passes self object to events', () => {
+  let receivedSelf;
+  const l = L(V('button', {
+    onClick: (e, self) => { receivedSelf = self }
+  }));
+
+  l.el.click();
+
+  assertEqual(l, receivedSelf);
+});
 
 
-var { el } = L('div', { style: { 'color': 'red' } },
-  'Here, have some...',
-  document.createElement("hr"),
-  L('i', 'italic text!'),
-);
+lTest.addTest('runs onCreate lifecycle', () => {
+  let run = false;
 
-document.body.appendChild(el);
+  L(V('div', {
+    $onCreate() { run = true }
+  }));
+
+  assert(run);
+});
+
+lTest.addTest('runs onCreate after initializing children (bottom-up, inside-out order)', () => {
+  let childCount;
+  const order = [];
+  L(V('div', {
+    $onCreate(self) {
+      childCount = self.children.length;
+      order.push('parent')
+    }
+  },
+    V('span', { $onCreate: () => { order.push('child') } })
+  ));
+
+  assertEqual(childCount, 1);
+  assertDeepEqual(order, ['child', 'parent']);
+});
+
+lTest.addTest('runs onCreate bottom-up/inside-out for nested component calls', () => {
+  const order = [];
+  function Inner() {
+    return V('div', { $onCreate: () => { order.push('inner') } });
+  }
+  function Outer() {
+    return V(Inner, { $onCreate: () => { order.push('outer') } });
+  }
+
+  L(V(Outer));
+  assertDeepEqual(order, ['inner', 'outer']);
+});
+
+lTest.runTests();
+
+const mountTest = new TestSuite('mount');
+
+mountTest.addTest('mount() triggers onMount', () => {
+  let mounted = false;
+
+  const l = L(V('div', {
+    $onMount() { mounted = true }
+  }));
+
+  mount(l, document.body);
+
+  assert(mounted);
+});
+
+mountTest.addTest('onMount runs child before parent', () => {
+  const order = [];
+
+  const l = L(
+    V('div', {
+      $onMount() { order.push('parent') }
+    },
+      V('span', {
+        $onMount() { order.push('child') }
+      })
+    )
+  );
+
+  mount(l, document.body);
+
+  assertDeepEqual(order, ['child', 'parent']);
+});
+
+mountTest.runTests();
+
+const unmountTest = new TestSuite('unmount');
+
+unmountTest.addTest('unmount() runs onUnmount', () => {
+  let unmounted = false;
+
+  const l = L(V('div', {
+    $onUnmount() { unmounted = true }
+  }));
+
+  mount(l, document.body);
+  unmount(l);
+
+  assert(unmounted);
+});
+
+unmountTest.addTest('onUnmount runs child before parent', () => {
+  const order = [];
+
+  const l = L(
+    V('div', {
+      $onUnmount() { order.push('parent') }
+    },
+      V('span', {
+        $onUnmount() { order.push('child') }
+      })
+    )
+  );
+
+  mount(l, document.body);
+  unmount(l);
+
+  assertDeepEqual(order, ['child', 'parent']);
+});
+
+unmountTest.addTest('unmount() removes event listeners', () => {
+  let count = 0;
+
+  const l = L(V('button', {
+    onClick() { count++ }
+  }));
+
+  mount(l, document.body);
+  unmount(l);
+
+  l.el.click();
+
+  assertEqual(count, 0);
+});
+
+unmountTest.runTests();
