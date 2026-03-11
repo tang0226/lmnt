@@ -1,6 +1,6 @@
 # LMNT:
-A tiny Javascript framework inspired by and modeled after React and Redux.
-One of my attempts to build a scalable UI framework from scratch in vanilla JS.
+A small vanilla JS framework modeled after React and Redux.
+One of my attempts to build a scalable frontend UI framework from scratch.
 
 To import:
 ```javascript
@@ -49,7 +49,7 @@ console.log(vnode);
 ```
 
 ### `L(vnode)`
-Creates a new DOM element based on a given v-node and wraps it in an L-object containing children L-objects, hooks, and props.
+Converts a v-node into an L-object containing the node's DOM element, children L-objects, hooks, and props.
 Also executes `onCreate` hooks of the v-node and its descendants (bottom-up).
 
 ```javascript
