@@ -1,9 +1,9 @@
 import { V, L, mount, unmount } from '../../src/lmnt.js';
 
 function Counter(init = 0) {
-  var count = init;
+  let count = init;
   
-  var v = V('button', {
+  const v = V('button', {
     onClick: (e, self) => {
       count++;
       render(self);
@@ -23,8 +23,8 @@ function Counter(init = 0) {
 }
 
 function Canvas() {
-  var ctx;
-  var v = V('canvas', {
+  let ctx;
+  const v = V('canvas', {
     width: 400,
     height: 400,
     style: 'border: 1px solid black',
@@ -43,7 +43,7 @@ function Canvas() {
 }
 
 function GoAway(content) {
-  var v = V('div', {
+  const v = V('div', {
     $onMount: (self) => { console.log(content + ' mounted') },
     onClick: (e, self) => { unmount(self) },
     $onUnmount: (self) => { console.log(content + ' unmounted') },
@@ -52,7 +52,7 @@ function GoAway(content) {
 }
 
 function GoAwayNested(content1, content2) {
-  var v = V(
+  const v = V(
     'div',
     {
       $onMount: () => { console.log(content1 + ' mounted') },
@@ -72,7 +72,7 @@ function GoAwayNested(content1, content2) {
   return v;
 }
 
-var a = L(V('div', { style: { 'background': '#EEE', 'font-family': 'sans-serif' }},
+const a = L(V('div', { style: { 'background': '#EEE', 'font-family': 'sans-serif' }},
   V('p', 'test paragraph.'),
   V('hr'),
   
@@ -100,7 +100,7 @@ console.log(a);
 mount(a, document.body);
 
 
-var vnode = V('div',
+let vnode = V('div',
   {
     style: { 'color': 'red' },
     $onMount: () => { console.log('mounted') },
@@ -112,12 +112,12 @@ var vnode = V('div',
 console.log(vnode);
 
 
-var vnode = V('div',
+vnode = V('div',
   'With ',
   V('i', 'italic'),
   ' and ',
   V('b', 'bold'),
   ' text',
 );
-var elObj = L(vnode);
+const elObj = L(vnode);
 console.log(elObj);

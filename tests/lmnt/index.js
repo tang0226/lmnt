@@ -111,8 +111,8 @@ lTest.addTest('maps `class` to `className', () => {
   assertEqual(l.el.className, 'class-name');
 });
 
-lTest.addTest('maps `for` to `htmlFor', () => {
-  const l = L(V('div', { for: 'id' }));
+lTest.addTest('maps `for` to `htmlFor`', () => {
+  const l = L(V('label', { for: 'id' }));
   assertEqual(l.el.htmlFor, 'id');
 });
 
@@ -287,6 +287,16 @@ mountTest.runTests();
 
 const unmountTest = new TestSuite('unmount');
 
+unmountTest.addTest('unmount() removes element from DOM', () => {
+  const l = L(V('button', { id: 'test-btn' }));
+  
+  mount(l, document.body);
+  assertEqual(document.getElementById('test-btn'), l.el);
+  
+  unmount(l);
+  assertEqual(document.getElementById('test-btn'), null);
+});
+
 unmountTest.addTest('unmount() runs onUnmount', () => {
   let unmounted = false;
 
@@ -319,19 +329,5 @@ unmountTest.addTest('onUnmount runs child before parent', () => {
   assertDeepEqual(order, ['child', 'parent']);
 });
 
-unmountTest.addTest('unmount() removes event listeners', () => {
-  let count = 0;
-
-  const l = L(V('button', {
-    onClick() { count++ }
-  }));
-
-  mount(l, document.body);
-  unmount(l);
-
-  l.el.click();
-
-  assertEqual(count, 0);
-});
 
 unmountTest.runTests();

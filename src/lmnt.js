@@ -1,7 +1,18 @@
-const propAliases = {
+const attrAliases = {
   'class': 'className',
   'for': 'htmlFor',
 };
+
+const propAliases = {
+  'className': 'class',
+  'htmlFor': 'for',
+};
+
+function isPrimitive(val) {
+  if (val === null) return true;
+  const type = typeof val;
+  return type !== 'object' && type !== 'function';
+}
 
 function composeHooks(outerHooks, innerHooks) {
   const res = {};
@@ -22,14 +33,20 @@ function composeHooks(outerHooks, innerHooks) {
   return res;
 }
 
+function applyCssObj(cssObj, el) {
+  for (const cssProp of Object.keys(cssObj)) {
+    el.style[cssProp] = cssObj[cssProp];
+  }
+  return el;
+}
+
 // virtual node creator
 // children are other vnodes, strings, or numbers
 export function V(type, props = {}, ...children) {
   // Treat `props` as another child if applicable
   if (
     props._isVnode ||
-    typeof props === 'string' ||
-    typeof props === 'number' ||
+    isPrimitive(props) ||
     Array.isArray(props)
   ) {
     children.unshift(props);
@@ -42,6 +59,10 @@ export function V(type, props = {}, ...children) {
   for (const [prop, val] of Object.entries(props)) {
     if (prop[0] === '$') {
       hooks[prop.slice(1)] = [val];
+    }
+    else if (prop.startsWith('on')) {
+      // Standardize event props by keeping them lowercase
+      cleanProps[prop.toLowerCase()] = val;
     }
     else {
       cleanProps[prop] = val;
@@ -71,8 +92,17 @@ export function V(type, props = {}, ...children) {
 
 // Returns a new object that contains a newly created DOM element
 export function L(vnode) {
-  if (typeof vnode === 'string' || typeof vnode === 'number') {
-    return { el: document.createTextNode(vnode) };
+  // Primitive values
+  if (isPrimitive(vnode)) {
+    return {
+      el: document.createTextNode(vnode),
+      hooks: {},
+      events: {},
+      vnode: {
+        type: 'text',
+        content: vnode,
+      }
+    };
   }
 
   // Unwrap component functions
@@ -82,67 +112,32 @@ export function L(vnode) {
     vnode = nextVnode;
   }
 
-  const el = document.createElement(vnode.type);  
-
-  // Props
-  const events = {};
-  for (const [prop, val] of Object.entries(vnode.props)) {
-    if (prop.startsWith("on") && prop[2] === prop[2].toUpperCase()) {
-      events[prop.slice(2).toLowerCase()] = val;
-    }
-    // Style
-    else if (prop === 'style') {
-      if (typeof val === 'object') {
-        for (const cssProp of Object.keys(val)) {
-          el.style[cssProp] = val[cssProp];
-        }
-      }
-      if (typeof val === 'string') {
-        el.style.cssText = val;
-      }
-    }
-    // Aliased props like `class` and `for`
-    else if (propAliases[prop]) {
-      el[propAliases[prop]] = val;
-    }
-    // All other props
-    else {
-      el[prop] = val;
-    }
-  }
-
-  const children = [];
-
   const self = {
-    el,
-    props: vnode.props,
-    hooks: vnode.hooks || {},
-    children,
+    vnode,
+    el: document.createElement(vnode.type),
+    children: [],
+    props: {...vnode.props},
+    hooks: Object.fromEntries(
+      Object.entries(vnode.hooks).map(([hook, fns]) => [hook, [...fns]])
+    ),
+    handleEvent(e) {
+      const type = e.type;
+      const handler = this.vnode.props['on' + type];
+      if (handler) {
+        handler(e, this);
+      }
+    }
   };
 
-  // Pass self as context to event listeners, since they are often defined
-  // in V (on the vnode level, not the DOM element (L) level)
-  self.events = {};
-  for (const eName of Object.keys(events)) {
-    const callback = (e) => {
-      events[eName](e, self);
-    }
-    self.el.addEventListener(eName, callback);
-    self.events[eName] = callback;
+  for (const prop in vnode.props) {
+    patchProp(self.el, prop, null, vnode.props[prop], self);
   }
 
-  for (const child of vnode.children) {
-    if (typeof child === 'string' || typeof child === 'number') {
-      const tn = document.createTextNode(child);
-      children.push(tn);
-      el.appendChild(tn);
-    }
-    else {
-      const childL = L(child);
-      children.push(childL);
-      el.appendChild(childL.el);
-    }
-  }
+  vnode.children.forEach(child => {
+    const childL = L(child);
+    self.children.push(childL);
+    self.el.appendChild(childL.el);
+  });
   
   // onCreate lifecycle (after child L calls = bottom-up)
   vnode.hooks.onCreate?.forEach(fn => { fn(self) });
@@ -151,36 +146,108 @@ export function L(vnode) {
 }
 
 
-function runMountLifecycle(elObj) {
+function runMountLifecycle(self) {
   // Run children's onMount first (bottom-up)
-  for (const child of elObj.children || []) {
-    if (child.el) {
-      runMountLifecycle(child);
-    }
+  for (const child of self.children || []) {
+    runMountLifecycle(child);
   }
-  elObj.hooks.onMount?.forEach(fn => { fn(elObj) });
+  self.hooks.onMount?.forEach(fn => { fn(self) });
 }
 
-export function mount(elObj, container) {
-  container.appendChild(elObj.el);
-  runMountLifecycle(elObj);
+export function mount(self, container) {
+  container.appendChild(self.el);
+  runMountLifecycle(self);
 }
 
-function runUnmountLifecycle(elObj) {
+function runUnmountLifecycle(self) {
   // Run children's onUnmount first (bottom-up)
-  for (const child of elObj.children || []) {
-    if (child.el) {
-      runUnmountLifecycle(child);
+  for (const child of self.children || []) {
+    runUnmountLifecycle(child);
+  }
+  self.hooks.onUnmount?.forEach(fn => { fn(self) });
+}
+
+export function unmount(self) {
+  runUnmountLifecycle(self);
+  self.el.remove();
+}
+
+// Efficiently updates a prop
+function patchProp(el, prop, prev, next, self) {
+  if (prop.startsWith("on")) {
+    const eName = prop.slice(2).toLowerCase();
+    if (!prev && next) {
+      el.addEventListener(eName, self);
+    }
+    else if (prev && !next) {
+      el.removeEventListener(eName, self);
     }
   }
-  elObj.hooks.onUnmount?.forEach(fn => { fn(elObj) });
 
-  for (const [event, callback] of Object.entries(elObj.events)) {
-    elObj.el.removeEventListener(event, callback);
+  else if (prop === 'style') {
+    if (typeof next === 'string') {
+      el.style.cssText = next;
+    }
+    else if (typeof next === 'object') {
+      if (prev) {
+        // Remove current props not present in `next`
+        for (const cssP in prev) {
+          if (!(cssP in next)) {
+            el.style[cssP] = '';
+          }
+        }
+      }
+      // Apply all `next` CSS props
+      applyCssObj(next, el);
+    }
+    else {
+      el.style.cssText = '';
+    }
+  }
+
+  else {
+    prop = attrAliases[prop] || prop;
+    const attr = propAliases[prop] || prop;
+
+    console.log(el, prop, attr, prop in el);
+
+    if (next == null) {
+      el.removeAttribute(attr);
+    }
+
+    else if (prop in el) {
+      if (el[prop] !== next) {
+        el[prop] = next;
+      }
+    }
+
+    else {
+      el.setAttribute(attr, next);
+    }
   }
 }
 
-export function unmount(elObj) {
-  runUnmountLifecycle(elObj);
-  elObj.el.remove();
+// Patch element with new v-node
+export function patch(self, newVnode) {
+  // 1. node type: replace entirely
+  if (self.vnode.type !== newVnode.type) {
+    const newSelf = L(newVnode);
+    // Replace old with new and clean up the old
+    self.el.replaceWith(newSelf.el);
+    unmount(self);
+
+    // Run new element's setup
+    runMountLifecycle(newSelf);
+
+    return newSelf;
+  }
+
+  // 2. Props
+  const oldProps = self.props;
+  const newProps = nextVnode.props;
+
+  for (const prop in oldProps) {
+    if (!(prop in newProps)) {}
+  }
 }
+
