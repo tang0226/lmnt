@@ -227,6 +227,9 @@ function patchProp(el, prop, prev, next, self) {
   }
 }
 
+// ************************
+// WIP, not working yet
+// ************************
 // Patch element with new v-node
 export function patch(self, newVnode) {
   // 1. node type: replace entirely
