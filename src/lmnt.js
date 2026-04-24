@@ -106,20 +106,36 @@ export function L(vnode) {
   }
 
   // Unwrap component functions
+  let renderFn = null;
+  let componentProps = null;
+
   while (typeof vnode.type === 'function') {
-    const nextVnode = vnode.type({ ...vnode.props, children: vnode.children });
-    nextVnode.hooks = composeHooks(vnode.hooks, nextVnode.hooks);
-    vnode = nextVnode;
+    const props = { ...vnode.props, children: vnode.children };
+    const result = vnode.type(props);
+
+    if (typeof result === 'function') {
+      // Stateful component: initializer returned a render fn; call it once for the initial vnode
+      renderFn = result;
+      componentProps = props;
+      const initialVnode = renderFn(props);
+      initialVnode.hooks = composeHooks(vnode.hooks, initialVnode.hooks);
+      vnode = initialVnode;
+      break;
+    }
+
+    result.hooks = composeHooks(vnode.hooks, result.hooks);
+    vnode = result;
   }
 
   const self = {
     vnode,
     el: document.createElement(vnode.type),
     children: [],
-    props: {...vnode.props},
     hooks: Object.fromEntries(
       Object.entries(vnode.hooks).map(([hook, fns]) => [hook, [...fns]])
     ),
+    renderFn,
+    componentProps,
     handleEvent(e) {
       const type = e.type;
       const handler = this.vnode.props['on' + type];
@@ -209,8 +225,6 @@ function patchProp(el, prop, prev, next, self) {
     prop = attrAliases[prop] || prop;
     const attr = propAliases[prop] || prop;
 
-    console.log(el, prop, attr, prop in el);
-
     if (next == null) {
       el.removeAttribute(attr);
     }
@@ -227,30 +241,87 @@ function patchProp(el, prop, prev, next, self) {
   }
 }
 
-// ************************
-// WIP, not working yet
-// ************************
 // Patch element with new v-node
 export function patch(self, newVnode) {
-  // 1. node type: replace entirely
+  var { el } = self;
+
+  // For stateful components: translate the component vnode (or signal trigger) to an inner vnode
+  if (self.renderFn) {
+    if (typeof newVnode.type === 'function') {
+      self.componentProps = { ...newVnode.props, children: newVnode.children };
+    }
+    newVnode = self.renderFn(self.componentProps);
+  }
+
+  // Handle text node updates in-place
+  if (self.vnode.type === 'text') {
+    const content = isPrimitive(newVnode) ? newVnode : '';
+    if (content !== self.vnode.content) {
+      self.el.nodeValue = String(content);
+      self.vnode = { type: 'text', content };
+    }
+    return self;
+  }
+
+  // 1. Different node type = replace entirely
   if (self.vnode.type !== newVnode.type) {
     const newSelf = L(newVnode);
-    // Replace old with new and clean up the old
-    self.el.replaceWith(newSelf.el);
+    el.replaceWith(newSelf.el);
     unmount(self);
-
-    // Run new element's setup
     runMountLifecycle(newSelf);
-
     return newSelf;
   }
 
   // 2. Props
-  const oldProps = self.props;
-  const newProps = nextVnode.props;
+  const oldProps = self.vnode.props || {};
+  const newProps = newVnode.props || {};
 
   for (const prop in oldProps) {
-    if (!(prop in newProps)) {}
+    if (!(prop in newProps)) {
+      patchProp(el, prop, oldProps[prop], null, self);
+    }
   }
+
+  for (const prop in newProps) {
+    const next = newProps[prop];
+    const prev = oldProps[prop];
+    if (next !== prev) {
+      patchProp(el, prop, prev, next, self);
+    }
+  }
+
+  // 3. Children (naive, no key-based reconciliation)
+  const oldChildren = self.children;
+  const newChildren = newVnode.children;
+  const oldLen = oldChildren.length;
+  const newLen = newChildren.length;
+
+  for (let i = 0; i < Math.min(oldLen, newLen); i++) {
+    self.children[i] = patch(oldChildren[i], newChildren[i]);
+  }
+
+  if (oldLen < newLen) {
+    for (let i = oldLen; i < newLen; i++) {
+      const newChildL = L(newChildren[i]);
+      self.children.push(newChildL);
+      mount(newChildL, el);
+    }
+  } else {
+    for (let i = newLen; i < oldLen; i++) {
+      unmount(oldChildren[i]);
+    }
+    self.children.length = newLen;
+  }
+
+  self.vnode = newVnode;
+
+  return self;
 }
 
+// Subscribe self to a signal and rerender on change. Auto-unsubscribes on unmount.
+export function bindSignal(self, sig) {
+  const unsub = sig.subscribe(() => {
+    patch(self, self.vnode);
+  });
+  (self.hooks.onUnmount ||= []).push(unsub);
+}

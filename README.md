@@ -1,5 +1,5 @@
 # LMNT:
-A small vanilla JS framework modeled after React and Redux.
+A small vanilla JS framework modeled after React, Vue, and Redux.
 One of my attempts to build a scalable frontend UI framework from scratch.
 
 To import:
