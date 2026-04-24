@@ -21,14 +21,3 @@ export function signal(initVal) {
   
   return { get, set, subscribe };
 }
-
-export function withSignal(elObj, sig, sub) {
-  let prev = sig.get();
-
-  const unsub = sig.subscribe((next) => {
-    sub(next, prev);
-    prev = next;
-  });
-
-  (elObj.hooks.onUnmount ||= []).push(unsub);
-}

@@ -1,4 +1,5 @@
-import { V, L, mount, unmount } from '../../../src/lmnt.js';
+import { V, L, mount, unmount, bindSignal } from '../../../src/lmnt.js';
+import { signal } from '../../../src/signal.js';
 import {
   assert,
   assertEqual,
@@ -331,3 +332,44 @@ unmountTest.addTest('onUnmount runs child before parent', () => {
 
 
 unmountTest.runTests();
+
+// Integration: bindSignal combines the lmnt L-object lifecycle with the signal interface
+const bindSignalTest = new TestSuite('bindSignal');
+
+bindSignalTest.addTest('adds unsubscribe function to onUnmount hooks', () => {
+  const sig = signal(0);
+  const l = L(V('div'));
+  bindSignal(l, sig);
+  assertDefined(l.hooks.onUnmount);
+  assertEqual(l.hooks.onUnmount.length, 1);
+  assertType(l.hooks.onUnmount[0], 'function');
+});
+
+bindSignalTest.addTest('patches stateful component when signal changes', () => {
+  const sig = signal('hello');
+  function MyComponent() {
+    return () => V('div', sig.get());
+  }
+  const l = L(V(MyComponent));
+  mount(l, document.body);
+  bindSignal(l, sig);
+  assertEqual(l.el.textContent, 'hello');
+  sig.set('world');
+  assertEqual(l.el.textContent, 'world');
+  unmount(l);
+});
+
+bindSignalTest.addTest('stops patching after unmount', () => {
+  const sig = signal('before');
+  function MyComponent() {
+    return () => V('div', sig.get());
+  }
+  const l = L(V(MyComponent));
+  mount(l, document.body);
+  bindSignal(l, sig);
+  unmount(l);
+  sig.set('after');
+  assertEqual(l.el.textContent, 'before');
+});
+
+bindSignalTest.runTests();
