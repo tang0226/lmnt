@@ -253,9 +253,9 @@ export function patch(self, newVnode) {
     newVnode = self.renderFn(self.componentProps);
   }
 
-  // Handle text node updates in-place
-  if (self.vnode.type === 'text') {
-    const content = isPrimitive(newVnode) ? newVnode : '';
+  // Handle text↔text update in place
+  if (isPrimitive(newVnode) && self.vnode.type === 'text') {
+    const content = newVnode;
     if (content !== self.vnode.content) {
       self.el.nodeValue = String(content);
       self.vnode = { type: 'text', content };
@@ -263,8 +263,8 @@ export function patch(self, newVnode) {
     return self;
   }
 
-  // 1. Different node type = replace entirely
-  if (self.vnode.type !== newVnode.type) {
+  // 1. Replace entirely on any type mismatch: element↔text, or different element tags
+  if (isPrimitive(newVnode) || self.vnode.type === 'text' || self.vnode.type !== newVnode.type) {
     const newSelf = L(newVnode);
     el.replaceWith(newSelf.el);
     unmount(self);

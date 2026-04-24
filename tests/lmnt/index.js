@@ -1,4 +1,4 @@
-import { V, L, mount, unmount, bindSignal } from '../../../src/lmnt.js';
+import { V, L, mount, unmount, patch, bindSignal } from '../../../src/lmnt.js';
 import { signal } from '../../../src/signal.js';
 import {
   assert,
@@ -82,6 +82,15 @@ vTest.addTest('treats props array as array of children', () => {
 vTest.addTest('creates empty hooks when none are provided', () => {
   const vnode = V('div', { id: 'div-id' });
   assertDeepEqual(vnode.hooks, {});
+});
+
+vTest.addTest('normalizes event prop names to lowercase', () => {
+  const handler = () => {};
+  const vnode = V('div', { onClick: handler, onMouseEnter: handler });
+  assertDefined(vnode.props.onclick);
+  assertDefined(vnode.props.onmouseenter);
+  assertEqual(vnode.props.onClick, undefined);
+  assertEqual(vnode.props.onMouseEnter, undefined);
 });
 
 vTest.runTests();
@@ -250,9 +259,34 @@ lTest.addTest('runs onCreate bottom-up/inside-out for nested component calls', (
   assertDeepEqual(order, ['inner', 'outer']);
 });
 
+lTest.addTest('detects stateful component and stores render function on self', () => {
+  function Counter() {
+    return () => V('span', 'initial');
+  }
+  const l = L(V(Counter));
+  assertType(l.renderFn, 'function');
+});
+
+lTest.addTest('calls render function for initial output of stateful component', () => {
+  let count = 0;
+  function Counter() {
+    return () => V('div', String(count));
+  }
+  const l = L(V(Counter));
+  assertEqual(l.el.tagName, 'DIV');
+  assertEqual(l.el.textContent, '0');
+});
+
 lTest.runTests();
 
 const mountTest = new TestSuite('mount');
+
+mountTest.addTest('mount() appends element to container', () => {
+  const l = L(V('div', { id: 'mount-test' }));
+  mount(l, document.body);
+  assertEqual(document.getElementById('mount-test'), l.el);
+  unmount(l);
+});
 
 mountTest.addTest('mount() triggers onMount', () => {
   let mounted = false;
@@ -332,6 +366,174 @@ unmountTest.addTest('onUnmount runs child before parent', () => {
 
 
 unmountTest.runTests();
+
+const patchTest = new TestSuite('patch');
+
+patchTest.addTest('updates text node content in place', () => {
+  const l = L('hello');
+  patch(l, 'world');
+  assertEqual(l.el.nodeValue, 'world');
+  assertEqual(l.vnode.content, 'world');
+});
+
+patchTest.addTest('replaces element with text node', () => {
+  const l = L(V('div'));
+  mount(l, document.body);
+  const newSelf = patch(l, 'hello');
+  assertEqual(newSelf.el.nodeType, Node.TEXT_NODE);
+  assertEqual(newSelf.el.nodeValue, 'hello');
+  unmount(newSelf);
+});
+
+patchTest.addTest('replaces element with null text node', () => {
+  const l = L(V('div'));
+  mount(l, document.body);
+  const newSelf = patch(l, null);
+  assertEqual(newSelf.el.nodeType, Node.TEXT_NODE);
+  unmount(newSelf);
+});
+
+patchTest.addTest('replaces text node with element', () => {
+  const l = L('hello');
+  mount(l, document.body);
+  const newSelf = patch(l, V('span', { id: 'replaced' }));
+  assertEqual(newSelf.el.tagName, 'SPAN');
+  assertTruthy(document.body.contains(newSelf.el));
+  unmount(newSelf);
+});
+
+patchTest.addTest('adds new prop', () => {
+  const l = L(V('div'));
+  patch(l, V('div', { id: 'new-id' }));
+  assertEqual(l.el.id, 'new-id');
+});
+
+patchTest.addTest('removes prop no longer in new vnode', () => {
+  const l = L(V('div', { id: 'old-id' }));
+  patch(l, V('div'));
+  assertEqual(l.el.id, '');
+});
+
+patchTest.addTest('updates changed prop', () => {
+  const l = L(V('input', { value: 'old' }));
+  patch(l, V('input', { value: 'new' }));
+  assertEqual(l.el.value, 'new');
+});
+
+patchTest.addTest('removes stale CSS properties when patching style object', () => {
+  const l = L(V('div', { style: { color: 'red', background: 'blue' } }));
+  patch(l, V('div', { style: { color: 'red' } }));
+  assertEqual(l.el.style.background, '');
+  assertEqual(l.el.style.color, 'red');
+});
+
+patchTest.addTest('calls updated event handler after patch', () => {
+  let oldCalled = false, newCalled = false;
+  const l = L(V('button', { onclick: () => { oldCalled = true; } }));
+  patch(l, V('button', { onclick: () => { newCalled = true; } }));
+  l.el.click();
+  assert(!oldCalled);
+  assert(newCalled);
+});
+
+patchTest.addTest('attaches event listener when event prop is added', () => {
+  let called = false;
+  const l = L(V('button'));
+  patch(l, V('button', { onclick: () => { called = true; } }));
+  l.el.click();
+  assert(called);
+});
+
+patchTest.addTest('detaches event listener when event prop is removed', () => {
+  let called = false;
+  const l = L(V('button', { onclick: () => { called = true; } }));
+  patch(l, V('button'));
+  l.el.click();
+  assert(!called);
+});
+
+patchTest.addTest('patches existing children by index', () => {
+  const l = L(V('div', {}, V('span', { id: 'a' })));
+  patch(l, V('div', {}, V('span', { id: 'b' })));
+  assertEqual(l.el.firstElementChild.id, 'b');
+  assertEqual(l.children.length, 1);
+});
+
+patchTest.addTest('mounts new children and runs onMount when list grows', () => {
+  let mounted = false;
+  const l = L(V('div', {}, V('span')));
+  mount(l, document.body);
+  patch(l, V('div', {},
+    V('span'),
+    V('p', { $onMount() { mounted = true; } })
+  ));
+  assertEqual(l.el.children.length, 2);
+  assertEqual(l.el.children[1].tagName, 'P');
+  assert(mounted);
+  unmount(l);
+});
+
+patchTest.addTest('unmounts children and runs onUnmount when list shrinks', () => {
+  let unmounted = false;
+  const l = L(V('div', {},
+    V('span'),
+    V('p', { $onUnmount() { unmounted = true; } })
+  ));
+  mount(l, document.body);
+  patch(l, V('div', {}, V('span')));
+  assertEqual(l.el.children.length, 1);
+  assert(unmounted);
+  unmount(l);
+});
+
+patchTest.addTest('replaces element and swaps it in the DOM when node type changes', () => {
+  const l = L(V('div'));
+  mount(l, document.body);
+  const newSelf = patch(l, V('span'));
+  assertEqual(newSelf.el.tagName, 'SPAN');
+  assertTruthy(document.body.contains(newSelf.el));
+  unmount(newSelf);
+});
+
+patchTest.addTest('runs onUnmount on old element and onMount on new when type changes', () => {
+  const order = [];
+  const l = L(V('div', { $onUnmount() { order.push('unmount'); } }));
+  mount(l, document.body);
+  const newSelf = patch(l, V('span', { $onMount() { order.push('mount'); } }));
+  assertDeepEqual(order, ['unmount', 'mount']);
+  unmount(newSelf);
+});
+
+patchTest.addTest('re-renders stateful component via render function', () => {
+  let count = 0;
+  function Counter() {
+    return () => V('div', String(count));
+  }
+  const l = L(V(Counter));
+  mount(l, document.body);
+  assertEqual(l.el.textContent, '0');
+  count = 1;
+  patch(l, l.vnode);
+  assertEqual(l.el.textContent, '1');
+  unmount(l);
+});
+
+patchTest.addTest('returns self when patching in place', () => {
+  const l = L(V('div'));
+  const result = patch(l, V('div', { id: 'patched' }));
+  assertEqual(result, l);
+});
+
+patchTest.addTest('returns new self when element type changes', () => {
+  const l = L(V('div'));
+  mount(l, document.body);
+  const result = patch(l, V('span'));
+  assertNotEqual(result, l);
+  assertEqual(result.el.tagName, 'SPAN');
+  unmount(result);
+});
+
+patchTest.runTests();
 
 // Integration: bindSignal combines the lmnt L-object lifecycle with the signal interface
 const bindSignalTest = new TestSuite('bindSignal');
