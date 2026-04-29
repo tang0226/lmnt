@@ -14,36 +14,8 @@ function isPrimitive(val) {
   return type !== 'object' && type !== 'function';
 }
 
-function composeHooks(outerHooks, innerHooks) {
-  const res = {};
-  for (const [hook, fns] of Object.entries(innerHooks)) {
-    res[hook] = [...fns];
-  }
-
-  for (const [hook, fns] of Object.entries(outerHooks)) {
-    if (res[hook]) {
-      // Combine, putting inner hooks first
-      res[hook] = [...res[hook], ...fns];
-    }
-    else {
-      res[hook] = [...fns];
-    }
-  }
-
-  return res;
-}
-
-function applyCssObj(cssObj, el) {
-  for (const cssProp of Object.keys(cssObj)) {
-    el.style[cssProp] = cssObj[cssProp];
-  }
-  return el;
-}
-
-// virtual node creator
-// children are other vnodes, strings, or numbers
 export function V(type, props = {}, ...children) {
-  // Treat `props` as another child if applicable
+  // Treat primitive or v-node props as a child
   if (
     props._isVnode ||
     isPrimitive(props) ||
@@ -53,121 +25,116 @@ export function V(type, props = {}, ...children) {
     props = {};
   }
 
-  // Split between props and hooks
+  // Split props into key, lifecycle hooks, and regular props
+  let key = null;
   const hooks = {};
   const cleanProps = {};
   for (const [prop, val] of Object.entries(props)) {
-    if (prop[0] === '$') {
+    if (prop === 'key') {
+      key = val;
+    } else if (prop[0] === '$') {
       hooks[prop.slice(1)] = [val];
-    }
-    else if (prop.startsWith('on')) {
-      // Standardize event props by keeping them lowercase
+    } else if (prop.startsWith('on')) {
       cleanProps[prop.toLowerCase()] = val;
-    }
-    else {
+    } else {
       cleanProps[prop] = val;
     }
   }
 
-  const childList = [];
+  // Linearize children, since arrays are excepted
+  const childArray = [];
   for (const child of children) {
     if (Array.isArray(child)) {
       for (const c of child) {
-        childList.push(c);
+        childArray.push(c);
       }
-    }
-    else {
-      childList.push(child);
+    } else {
+      childArray.push(child);
     }
   }
 
   return {
     type,
+    key,
     props: cleanProps,
     hooks,
-    children: childList,
+    children: childArray,
     _isVnode: true,
-  };
+  }
 }
 
-// Returns a new object that contains a newly created DOM element
 export function L(vnode) {
-  // Primitive values
+  // Create text nodes from primitives
   if (isPrimitive(vnode)) {
     return {
       el: document.createTextNode(vnode),
-      hooks: {},
-      events: {},
-      vnode: {
-        type: 'text',
-        content: vnode,
-      }
-    };
+      vnode,
+    }
   }
 
-  // Unwrap component functions
-  let renderFn = null;
-  let componentProps = null;
+  const self = { vnode };
 
-  while (typeof vnode.type === 'function') {
-    const props = { ...vnode.props, children: vnode.children };
-    const result = vnode.type(props);
-
-    if (typeof result === 'function') {
-      // Stateful component: initializer returned a render fn; call it once for the initial vnode
-      renderFn = result;
-      componentProps = props;
-      const initialVnode = renderFn(props);
-      initialVnode.hooks = composeHooks(vnode.hooks, initialVnode.hooks);
-      vnode = initialVnode;
-      break;
+  if (typeof vnode.type === 'function') {
+  // Component
+    let res = vnode.type({ ...vnode.props, children: vnode.children });
+    if (typeof res === 'function') {
+      self.render = res;
+      self.childL = L(res({ ...vnode.props, children: vnode.children }));
+    } else {
+      self.render = vnode.type;
+      self.childL = L(res);
     }
 
-    result.hooks = composeHooks(vnode.hooks, result.hooks);
-    vnode = result;
+    self.el = self.childL.el;
+  } else {
+  // Tag
+    self.el = document.createElement(vnode.type);
+    self.children = [];
+
+    // Props
+    for (const prop in vnode.props) {
+      patchProp(self.el, prop, null, vnode.props[prop], self);
+    }
+
+    // Children
+    vnode.children.forEach(child => {
+      const childL = L(child);
+      self.children.push(childL);
+      self.el.appendChild(childL.el);
+    });
+
+    // Events
+    self.handleEvent = (e) => {
+      const type = e.type;
+      const handler = self.vnode.props['on' + type];
+      if (handler) {
+        handler(e, self);
+      }
+    }
   }
 
-  const self = {
-    vnode,
-    el: document.createElement(vnode.type),
-    children: [],
-    hooks: Object.fromEntries(
-      Object.entries(vnode.hooks).map(([hook, fns]) => [hook, [...fns]])
-    ),
-    renderFn,
-    componentProps,
-    handleEvent(e) {
-      const type = e.type;
-      const handler = this.vnode.props['on' + type];
-      if (handler) {
-        handler(e, this);
-      }
+  // Update function (patches self with new props)
+  self.update = (props) => {
+    if (self.render) {
+      patch(self, { ...self.vnode, props });
     }
   };
 
-  for (const prop in vnode.props) {
-    patchProp(self.el, prop, null, vnode.props[prop], self);
-  }
+  // Deep copy hook arrays
+  self.hooks = Object.fromEntries(Object.entries(vnode.hooks).map(([key, val]) => [key, [...val]]));
 
-  vnode.children.forEach(child => {
-    const childL = L(child);
-    self.children.push(childL);
-    self.el.appendChild(childL.el);
-  });
-  
-  // onCreate lifecycle (after child L calls = bottom-up)
+  // Run onCreate lifecycle after all elements are created
   vnode.hooks.onCreate?.forEach(fn => { fn(self) });
 
   return self;
 }
 
-
 function runMountLifecycle(self) {
   // Run children's onMount first (bottom-up)
-  for (const child of self.children || []) {
+  for (const child of self.children || (self.childL ? [self.childL] : [])) {
     runMountLifecycle(child);
   }
-  self.hooks.onMount?.forEach(fn => { fn(self) });
+  self.hooks?.onMount?.forEach(fn => { fn(self) });
 }
 
 export function mount(self, container) {
@@ -177,10 +144,10 @@ export function mount(self, container) {
 
 function runUnmountLifecycle(self) {
   // Run children's onUnmount first (bottom-up)
-  for (const child of self.children || []) {
+  for (const child of self.children || (self.childL ? [self.childL] : [])) {
     runUnmountLifecycle(child);
   }
-  self.hooks.onUnmount?.forEach(fn => { fn(self) });
+  self.hooks?.onUnmount?.forEach(fn => { fn(self) });
 }
 
 export function unmount(self) {
@@ -188,91 +155,97 @@ export function unmount(self) {
   self.el.remove();
 }
 
-// Efficiently updates a prop
 function patchProp(el, prop, prev, next, self) {
-  if (prop.startsWith("on")) {
+  if (prop.startsWith('on')) {
     const eName = prop.slice(2).toLowerCase();
     if (!prev && next) {
       el.addEventListener(eName, self);
-    }
-    else if (prev && !next) {
+    } else if (prev && !next) {
       el.removeEventListener(eName, self);
     }
-  }
-
-  else if (prop === 'style') {
+  } else if (prop === 'style') {
     if (typeof next === 'string') {
       el.style.cssText = next;
-    }
-    else if (typeof next === 'object') {
-      if (prev) {
-        // Remove current props not present in `next`
+    } else if (next && typeof next === 'object') {
+      if (typeof prev === 'object' && prev) {
         for (const cssP in prev) {
           if (!(cssP in next)) {
             el.style[cssP] = '';
           }
         }
+      } else if (prev) {
+        // prev was a string - clear all styles
+        el.style.cssText = '';
       }
-      // Apply all `next` CSS props
-      applyCssObj(next, el);
-    }
-    else {
+
+      // Apply style from next v-node
+      for (const [prop, val] of Object.entries(next)) {
+        el.style[prop] = val;
+      }
+    } else {
+      // no next value; clear styles
       el.style.cssText = '';
     }
-  }
-
-  else {
-    prop = attrAliases[prop] || prop;
+  } else {
     const attr = propAliases[prop] || prop;
-
+    prop = attrAliases[attr] || prop;
     if (next == null) {
       el.removeAttribute(attr);
-    }
-
-    else if (prop in el) {
+    } else if (prop in el) {
       if (el[prop] !== next) {
         el[prop] = next;
       }
-    }
-
-    else {
+    } else {
       el.setAttribute(attr, next);
     }
   }
 }
 
-// Patch element with new v-node
 export function patch(self, newVnode) {
-  var { el } = self;
+  const { el } = self;
 
-  // For stateful components: translate the component vnode (or signal trigger) to an inner vnode
-  if (self.renderFn) {
-    if (typeof newVnode.type === 'function') {
-      self.componentProps = { ...newVnode.props, children: newVnode.children };
+  // Text ↔ text: update nodeValue in place
+  if (isPrimitive(self.vnode)) {
+    if (isPrimitive(newVnode)) {
+      if (newVnode !== self.vnode) {
+        el.nodeValue = String(newVnode);
+        self.vnode = newVnode;
+      }
+      return self;
     }
-    newVnode = self.renderFn(self.componentProps);
+    // text → element: full replace (text nodes have no hooks, skip unmount)
+    const newSelf = L(newVnode);
+    el.replaceWith(newSelf.el);
+    runMountLifecycle(newSelf);
+    return newSelf;
   }
 
-  // Handle text↔text update in place
-  if (isPrimitive(newVnode) && self.vnode.type === 'text') {
-    const content = newVnode;
-    if (content !== self.vnode.content) {
-      self.el.nodeValue = String(content);
-      self.vnode = { type: 'text', content };
-    }
-    return self;
+  // element → text: full replace (text nodes have no hooks, skip mount lifecycle)
+  if (isPrimitive(newVnode)) {
+    const newSelf = L(newVnode);
+    el.replaceWith(newSelf.el);
+    unmount(self);
+    return newSelf;
   }
 
-  // 1. Replace entirely on any type mismatch: element↔text, or different element tags
-  if (isPrimitive(newVnode) || self.vnode.type === 'text' || self.vnode.type !== newVnode.type) {
+  // Different component type = full replace
+  if (self.vnode.type !== newVnode.type) {
     const newSelf = L(newVnode);
     el.replaceWith(newSelf.el);
     unmount(self);
     runMountLifecycle(newSelf);
     return newSelf;
   }
+  
+  if (self.render) {
+    const innerVnode = self.render({ ...newVnode.props, children: newVnode.children });
+    self.childL = patch(self.childL, innerVnode);
+    self.el = self.childL.el;
+    self.vnode = newVnode;
+    return self;
+  }
 
-  // 2. Props
+  // Props
   const oldProps = self.vnode.props || {};
   const newProps = newVnode.props || {};
 
@@ -290,38 +263,77 @@ export function patch(self, newVnode) {
     }
   }
 
-  // 3. Children (naive, no key-based reconciliation)
-  const oldChildren = self.children;
-  const newChildren = newVnode.children;
-  const oldLen = oldChildren.length;
-  const newLen = newChildren.length;
 
-  for (let i = 0; i < Math.min(oldLen, newLen); i++) {
-    self.children[i] = patch(oldChildren[i], newChildren[i]);
+  // Children (key-based diffing/patching)
+  const keyedOld = new Map();
+  const unkeyedOld = [];
+  for (const oldL of self.children) {
+    const k = isPrimitive(oldL.vnode) ? null : oldL.vnode.key;
+    if (k !== null) {
+      keyedOld.set(k, oldL);
+    } else {
+      unkeyedOld.push(oldL);
+    }
   }
 
-  if (oldLen < newLen) {
-    for (let i = oldLen; i < newLen; i++) {
-      const newChildL = L(newChildren[i]);
-      self.children.push(newChildL);
-      mount(newChildL, el);
+  // Reconcile new children left-to-right
+  const newChildren = [];
+  const newNodes = []; // freshly created L-nodes that need mount lifecycle
+  let unkeyedI = 0;
+  for (const newV of newVnode.children) {
+    const k = isPrimitive(newV) ? null : newV.key;
+
+    if (k !== null) { // keyed
+      let oldL = keyedOld.get(k);
+      if (oldL !== undefined) { // key matches
+        keyedOld.delete(k);
+        newChildren.push(patch(oldL, newV));
+      } else { // key doesn't match; add newV as new element
+        const newL = L(newV);
+        newNodes.push(newL);
+        newChildren.push(newL);
+      }
+    } else { // unkeyed: consume positionally
+      const oldL = unkeyedOld[unkeyedI++];
+      if (oldL) {
+        newChildren.push(patch(oldL, newV));
+      } else {
+        const newL = L(newV);
+        newNodes.push(newL);
+        newChildren.push(newL);
+      }
     }
-  } else {
-    for (let i = newLen; i < oldLen; i++) {
-      unmount(oldChildren[i]);
-    }
-    self.children.length = newLen;
   }
+
+  // Remove old nodes
+  for (const oldL of keyedOld.values()) {
+    unmount(oldL);
+  }
+  for (let i = unkeyedI; i < unkeyedOld.length; i++) {
+    unmount(unkeyedOld[i]);
+  }
+
+  // Reorder DOM
+  let nextSibling = null;
+  for (let i = newChildren.length - 1; i >= 0; i--) {
+    const child = newChildren[i];
+    if (child.el.parentNode !== el || child.el.nextSibling !== nextSibling) {
+      el.insertBefore(child.el, nextSibling);
+    }
+    nextSibling = child.el;
+  }
+
+  // Run mount lifecycle on new nodes
+  newNodes.forEach((node) => runMountLifecycle(node));
 
   self.vnode = newVnode;
+  self.children = newChildren;
 
   return self;
 }
 
 // Subscribe self to a signal and rerender on change. Auto-unsubscribes on unmount.
 export function bindSignal(self, sig) {
-  const unsub = sig.subscribe(() => {
-    patch(self, self.vnode);
-  });
+  const unsub = sig.subscribe(() => self.update());
   (self.hooks.onUnmount ||= []).push(unsub);
 }
