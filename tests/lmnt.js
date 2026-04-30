@@ -1,4 +1,4 @@
-import { V, L, mount, unmount, patch, bindSignal, signal } from '../src/index.js';
+import { V, L, mount, unmount, patch, bindSignal, bindStore, signal, createStore } from '../src/index.js';
 import {
   assert,
   assertEqual,
@@ -11,8 +11,8 @@ import {
   assertFalsy,
   assertThrows,
   assertDoesNotThrow
-} from './test-framework/assert.js';
-import { TestSuite } from './test-framework/test-suite.js';
+} from '../test-framework/assert.js';
+import { TestSuite } from '../test-framework/test-suite.js';
 
 const vTest = new TestSuite('V');
 
@@ -436,3 +436,86 @@ bindSignalTest.addTest('stops patching after unmount', () => {
 });
 
 bindSignalTest.runTests();
+
+const bindStoreTest = new TestSuite('bindStore');
+
+bindStoreTest.addTest('adds unsubscribe function to onUnmount hooks', () => {
+  const store = createStore(s => s, {});
+  const l = L(V('div'));
+  bindStore(l, store);
+  assertDefined(l.hooks.onUnmount);
+  assertEqual(l.hooks.onUnmount.length, 1);
+  assertType(l.hooks.onUnmount[0], 'function');
+});
+
+bindStoreTest.addTest('patches stateful component when store dispatches', () => {
+  const store = createStore(
+    (state, action) => action.type === 'SET' ? { value: action.payload } : state,
+    { value: 'hello' }
+  );
+  function MyComponent() {
+    return () => V('div', store.getState().value);
+  }
+  const l = L(V(MyComponent));
+  mount(l, document.body);
+  bindStore(l, store);
+  assertEqual(l.el.textContent, 'hello');
+  store.dispatch({ type: 'SET', payload: 'world' });
+  assertEqual(l.el.textContent, 'world');
+  unmount(l);
+});
+
+bindStoreTest.addTest('stops patching after unmount', () => {
+  const store = createStore(
+    (state, action) => action.type === 'SET' ? { value: action.payload } : state,
+    { value: 'before' }
+  );
+  function MyComponent() {
+    return () => V('div', store.getState().value);
+  }
+  const l = L(V(MyComponent));
+  mount(l, document.body);
+  bindStore(l, store);
+  unmount(l);
+  store.dispatch({ type: 'SET', payload: 'after' });
+  assertEqual(l.el.textContent, 'before');
+});
+
+bindStoreTest.addTest('select: only rerenders when selected value changes', () => {
+  const store = createStore(
+    (state, action) =>
+      action.type === 'SET_A' ? { ...state, a: action.payload } :
+      action.type === 'SET_B' ? { ...state, b: action.payload } :
+      state,
+    { a: 'initial-a', b: 'initial-b' }
+  );
+  function MyComponent() {
+    return () => V('div', store.getState().a);
+  }
+  const l = L(V(MyComponent));
+  mount(l, document.body);
+  bindStore(l, store, { select: s => s.a });
+  store.dispatch({ type: 'SET_B', payload: 'changed-b' });
+  assertEqual(l.el.textContent, 'initial-a');
+  store.dispatch({ type: 'SET_A', payload: 'changed-a' });
+  assertEqual(l.el.textContent, 'changed-a');
+  unmount(l);
+});
+
+bindStoreTest.addTest('shouldUpdate: custom predicate suppresses re-render', () => {
+  const store = createStore(
+    (state, action) => action.type === 'SET' ? { value: action.payload } : state,
+    { value: 'initial' }
+  );
+  function MyComponent() {
+    return () => V('div', store.getState().value);
+  }
+  const l = L(V(MyComponent));
+  mount(l, document.body);
+  bindStore(l, store, { shouldUpdate: () => false });
+  store.dispatch({ type: 'SET', payload: 'changed' });
+  assertEqual(l.el.textContent, 'initial');
+  unmount(l);
+});
+
+bindStoreTest.runTests();

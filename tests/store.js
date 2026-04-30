@@ -11,8 +11,8 @@ import {
   assertFalsy,
   assertThrows,
   assertDoesNotThrow
-} from './test-framework/assert.js';
-import { TestSuite } from './test-framework/test-suite.js';
+} from '../test-framework/assert.js';
+import { TestSuite } from '../test-framework/test-suite.js';
 
 const testSuite = new TestSuite('createStore');
 
