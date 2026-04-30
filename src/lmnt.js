@@ -337,3 +337,21 @@ export function bindSignal(self, sig) {
   const unsub = sig.subscribe(() => self.update());
   (self.hooks.onUnmount ||= []).push(unsub);
 }
+
+// Subscribe self to a store and rerender when selected state changes. Auto-unsubscribes on unmount.
+export function bindStore(self, store, {
+  select = s => s,
+  shouldUpdate = (next, prev) => !Object.is(next, prev),
+} = {}) {
+  let prev = select(store.getState());
+
+  const unsub = store.subscribe((state) => {
+    const next = select(state);
+    if (shouldUpdate(next, prev)) {
+      prev = next;
+      self.update();
+    }
+  });
+
+  (self.hooks.onUnmount ||= []).push(unsub);
+}
