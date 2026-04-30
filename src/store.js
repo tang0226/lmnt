@@ -51,30 +51,3 @@ export function createStore(reducer, initialState) {
     }
   }
 }
-
-// Hook that automatically handles a store subscription and provides custom state selection and render control
-export function withStore(
-  elObj,
-  store,
-  {
-    select = s => s,
-    shouldRender = ({ next, prev, action }) =>
-      prev !== next,
-    render
-  } = {}
-) {
-
-  let prev = select(store.getState());
-  
-  const unsub = store.subscribe((state, action) => {
-    const next = select(state);
-
-    if (shouldRender({ next, prev, action })) {
-      render({ next, prev, action });
-      prev = next;
-    }
-  });
-
-  // Add unsubscribe call to unmount callback
-  (elObj.hooks.onUnmount ||= []).push(unsub);
-}
