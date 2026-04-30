@@ -1,4 +1,4 @@
-import { signal } from '../../../src/signal.js';
+import { signal } from '../src/index.js';
 import {
   assert,
   assertEqual,
@@ -11,8 +11,8 @@ import {
   assertFalsy,
   assertThrows,
   assertDoesNotThrow
-} from '../../test-framework/assert.js';
-import { TestSuite } from '../../test-framework/test-suite.js';
+} from './test-framework/assert.js';
+import { TestSuite } from './test-framework/test-suite.js';
 
 const signalTest = new TestSuite('signal');
 

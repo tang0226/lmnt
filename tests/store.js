@@ -1,3 +1,4 @@
+import { createStore } from '../src/index.js';
 import {
   assert,
   assertEqual,
@@ -10,10 +11,8 @@ import {
   assertFalsy,
   assertThrows,
   assertDoesNotThrow
-} from '../../test-framework/assert.js';
-import { TestSuite } from '../../test-framework/test-suite.js';
-
-import { createStore } from '../../src/store.js';
+} from './test-framework/assert.js';
+import { TestSuite } from './test-framework/test-suite.js';
 
 const testSuite = new TestSuite('createStore');
 
@@ -128,7 +127,5 @@ testSuite.addTest('unsubscribe removes listener', () => {
   store.dispatch({});
   assertEqual(updateCount, 1);
 });
-
-
 
 testSuite.runTests();
