@@ -1,5 +1,5 @@
 // Simple Redux imitation (based on the Redux website)
-export function createStore(reducer, initialState) {
+export function createStore(reducer, initialState, { equals = Object.is } = {}) {
 
   const listeners = new Set();
   const subscribe = (listener) => {
@@ -19,7 +19,9 @@ export function createStore(reducer, initialState) {
       getState,
       subscribe,
       dispatch(action) {
-        state = reducer(state, action);
+        const next = reducer(state, action);
+        if (equals(next, state)) return;
+        state = next;
         listeners.forEach(l => l(state, action));
       }
     };
@@ -33,20 +35,27 @@ export function createStore(reducer, initialState) {
     const sliceNames = Object.keys(slices);
     state = {};
     const reducers = {};
-    
+    const sliceEquals = {};
+
     for (const name of sliceNames) {
       reducers[name] = slices[name].reducer;
       state[name] = slices[name].state;
+      sliceEquals[name] = slices[name].equals ?? Object.is;
     }
 
     return {
       getState,
       subscribe,
       dispatch(action) {
+        let changed = false;
         for (const name of sliceNames) {
-          state[name] = reducers[name](state[name], action);
+          const next = reducers[name](state[name], action);
+          if (!sliceEquals[name](next, state[name])) {
+            state[name] = next;
+            changed = true;
+          }
         }
-        listeners.forEach(l => l(state, action));
+        if (changed) listeners.forEach(l => l(state, action));
       }
     }
   }

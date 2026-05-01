@@ -128,4 +128,78 @@ testSuite.addTest('unsubscribe removes listener', () => {
   assertEqual(updateCount, 1);
 });
 
+// --- Single-reducer equals ---
+
+testSuite.addTest('equals: dispatch returning same state does not notify listeners', () => {
+  const store = createStore((state) => state, { val: 0 });
+  let notifyCount = 0;
+  store.subscribe(() => { notifyCount++; });
+  store.dispatch({});
+  assertEqual(notifyCount, 0);
+});
+
+testSuite.addTest('equals: dispatch returning different state notifies listeners', () => {
+  const store = createStore((state) => ({ ...state }), { val: 0 });
+  let notifyCount = 0;
+  store.subscribe(() => { notifyCount++; });
+  store.dispatch({});
+  assertEqual(notifyCount, 1);
+});
+
+testSuite.addTest('equals: custom equals prevents notification when considered equal', () => {
+  const store = createStore(
+    (state, action) => action.type === 'SET' ? { val: action.val } : state,
+    { val: 0 },
+    { equals: (a, b) => a.val === b.val }
+  );
+  let notifyCount = 0;
+  store.subscribe(() => { notifyCount++; });
+  store.dispatch({ type: 'SET', val: 0 });
+  assertEqual(notifyCount, 0);
+  store.dispatch({ type: 'SET', val: 1 });
+  assertEqual(notifyCount, 1);
+});
+
+// --- Multi-slice equals ---
+
+testSuite.addTest('multi-slice: all slices unchanged does not notify listeners', () => {
+  const store = createStore({
+    a: { reducer: (s) => s, state: 0 },
+    b: { reducer: (s) => s, state: 0 },
+  });
+  let notifyCount = 0;
+  store.subscribe(() => { notifyCount++; });
+  store.dispatch({});
+  assertEqual(notifyCount, 0);
+});
+
+testSuite.addTest('multi-slice: one slice changing fires listeners', () => {
+  const store = createStore({
+    counter: { reducer: (s, a) => a.type === 'incr' ? s + 1 : s, state: 0 },
+    label:   { reducer: (s) => s, state: 'hello' },
+  });
+  let notifyCount = 0;
+  store.subscribe(() => { notifyCount++; });
+  store.dispatch({ type: 'incr' });
+  assertEqual(notifyCount, 1);
+  store.dispatch({ type: 'other' });
+  assertEqual(notifyCount, 1);
+});
+
+testSuite.addTest('multi-slice: per-slice custom equals respected', () => {
+  const store = createStore({
+    user: {
+      reducer: (s, a) => a.type === 'SET' ? { id: a.id, name: a.name } : s,
+      state: { id: 1, name: 'Alice' },
+      equals: (a, b) => a.id === b.id,
+    },
+  });
+  let notifyCount = 0;
+  store.subscribe(() => { notifyCount++; });
+  store.dispatch({ type: 'SET', id: 1, name: 'Bob' });
+  assertEqual(notifyCount, 0);
+  store.dispatch({ type: 'SET', id: 2, name: 'Carol' });
+  assertEqual(notifyCount, 1);
+});
+
 testSuite.runTests();
