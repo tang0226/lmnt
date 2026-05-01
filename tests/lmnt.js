@@ -1,4 +1,4 @@
-import { V, L, mount, unmount, patch, bindSignal, bindStore, signal, createStore } from '../src/index.js';
+import { V, L, mount, unmount, patch, bindSignal, bindStore, signal, createStore, Fragment } from '../src/index.js';
 import {
   assert,
   assertEqual,
@@ -306,6 +306,52 @@ lTest.addTest('patches through render fn returning a stateless component', () =>
   patch(l, l.vnode);
   assertEqual(l.el.textContent, '3');
   unmount(l);
+});
+
+lTest.addTest('creates fragment with anchor comment node', () => {
+  const l = L(V(Fragment));
+  assertEqual(l.el.nodeType, Node.COMMENT_NODE);
+  assert(l.isFragment);
+});
+
+lTest.addTest('creates fragment children in children array', () => {
+  const l = L(V(Fragment, null, V('span'), V('p')));
+  assertEqual(l.children.length, 2);
+  assertEqual(l.children[0].el.tagName, 'SPAN');
+  assertEqual(l.children[1].el.tagName, 'P');
+});
+
+lTest.addTest('fragment inside element: children are DOM siblings', () => {
+  const l = L(V('div', V(Fragment, null, V('span'), V('p'))));
+  // div childNodes: span, p, comment
+  const nodes = [...l.el.childNodes];
+  assertEqual(nodes[0].tagName, 'SPAN');
+  assertEqual(nodes[1].tagName, 'P');
+  assertEqual(nodes[2].nodeType, Node.COMMENT_NODE);
+});
+
+lTest.addTest('component returning fragment: l.el is the anchor', () => {
+  function Comp() {
+    return V(Fragment, null, V('span', 'a'), V('span', 'b'));
+  }
+  const l = L(V(Comp));
+  assertEqual(l.el.nodeType, Node.COMMENT_NODE);
+});
+
+lTest.addTest('mount() fragment: all children appended to container', () => {
+  const l = L(V(Fragment, null, V('span', { id: 'f1' }), V('span', { id: 'f2' })));
+  mount(l, document.body);
+  assertDefined(document.getElementById('f1'));
+  assertDefined(document.getElementById('f2'));
+  unmount(l);
+});
+
+lTest.addTest('unmount() fragment: all children removed from DOM', () => {
+  const l = L(V(Fragment, null, V('span', { id: 'g1' }), V('span', { id: 'g2' })));
+  mount(l, document.body);
+  unmount(l);
+  assertEqual(document.getElementById('g1'), null);
+  assertEqual(document.getElementById('g2'), null);
 });
 
 lTest.runTests();

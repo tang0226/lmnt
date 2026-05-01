@@ -1,4 +1,4 @@
-import { V, L, mount, unmount, patch } from '../src/index.js';
+import { V, L, mount, unmount, patch, Fragment } from '../src/index.js';
 import {
   assert,
   assertEqual,
@@ -610,7 +610,6 @@ patchTest.addTest('new child from diffing: onMount fires after DOM insertion', (
   patch(l, V('div',
     V('span', { id: 'span-id', $onMount(self) { elWasInDOM = Boolean(document.getElementById(self.el.id)) } }),
   ));
-  console.log(elWasInDOM);
   assert(elWasInDOM);
   unmount(l);
 });
@@ -743,6 +742,120 @@ patchTest.addTest('stateful component whose render returns a stateless component
   label = 'second';
   patch(l, l.vnode);
   assertEqual(l.el.textContent, 'second');
+});
+
+// --- Fragment patches ---
+
+patchTest.addTest('fragment: updates child text in place', () => {
+  const l = L(V('div', V(Fragment, null, 'hello')));
+  mount(l, document.body);
+  patch(l, V('div', V(Fragment, null, 'world')));
+  assertEqual(l.el.textContent, 'world');
+  unmount(l);
+});
+
+patchTest.addTest('fragment: appends a child', () => {
+  const l = L(V('div', V(Fragment, null, V('span', { id: 'a' }))));
+  mount(l, document.body);
+  patch(l, V('div', V(Fragment, null, V('span', { id: 'a' }), V('span', { id: 'b' }))));
+  assertEqual(l.el.children.length, 2);
+  assertEqual(l.el.children[1].id, 'b');
+  unmount(l);
+});
+
+patchTest.addTest('fragment: removes a child, runs unmount lifecycle', () => {
+  let unmounted = false;
+  const l = L(V('div', V(Fragment, null,
+    V('span', { id: 'keep' }),
+    V('span', { $onUnmount() { unmounted = true; } }),
+  )));
+  mount(l, document.body);
+  patch(l, V('div', V(Fragment, null, V('span', { id: 'keep' }))));
+  assertEqual(l.el.children.length, 1);
+  assert(unmounted);
+  unmount(l);
+});
+
+patchTest.addTest('fragment: keyed reorder preserves DOM nodes', () => {
+  const l = L(V('div', V(Fragment, null,
+    V('span', { key: 'a', id: 'a' }),
+    V('span', { key: 'b', id: 'b' }),
+  )));
+  mount(l, document.body);
+  const fragL = l.children[0];
+  const [elA, elB] = fragL.children.map(c => c.el);
+  patch(l, V('div', V(Fragment, null,
+    V('span', { key: 'b', id: 'b' }),
+    V('span', { key: 'a', id: 'a' }),
+  )));
+  assertEqual(l.el.children[0], elB);
+  assertEqual(l.el.children[1], elA);
+  unmount(l);
+});
+
+patchTest.addTest('fragment → element: full replace', () => {
+  const l = L(V('div', V(Fragment, null, V('span', 'hi'))));
+  mount(l, document.body);
+  patch(l, V('div', V('p', 'bye')));
+  assertEqual(l.el.children.length, 1);
+  assertEqual(l.el.children[0].tagName, 'P');
+  unmount(l);
+});
+
+patchTest.addTest('element → fragment: full replace', () => {
+  const l = L(V('div', V('p', 'old')));
+  mount(l, document.body);
+  patch(l, V('div', V(Fragment, null, V('span', 'a'), V('span', 'b'))));
+  assertEqual(l.el.children.length, 2);
+  assertEqual(l.el.children[0].tagName, 'SPAN');
+  unmount(l);
+});
+
+patchTest.addTest('fragment: empty → populated', () => {
+  const l = L(V('div', V(Fragment)));
+  mount(l, document.body);
+  patch(l, V('div', V(Fragment, null, V('span', { id: 'new' }))));
+  assertEqual(l.el.children.length, 1);
+  assertDefined(document.getElementById('new'));
+  unmount(l);
+});
+
+patchTest.addTest('fragment: populated → empty', () => {
+  const l = L(V('div', V(Fragment, null, V('span'), V('span'))));
+  mount(l, document.body);
+  patch(l, V('div', V(Fragment)));
+  assertEqual(l.el.children.length, 0);
+  unmount(l);
+});
+
+patchTest.addTest('nested fragments render correctly', () => {
+  const l = L(V('div',
+    V(Fragment, null,
+      V(Fragment, null, V('span', { id: 'inner' })),
+      V('p', { id: 'outer' }),
+    )
+  ));
+  mount(l, document.body);
+  assertDefined(document.getElementById('inner'));
+  assertDefined(document.getElementById('outer'));
+  unmount(l);
+});
+
+patchTest.addTest('component switching from element to fragment output', () => {
+  let useFragment = false;
+  function Comp() {
+    return useFragment
+      ? V(Fragment, null, V('span', 'a'), V('span', 'b'))
+      : V('div', 'single');
+  }
+  const l = L(V(Comp));
+  mount(l, document.body);
+  assertEqual(l.el.tagName, 'DIV');
+  useFragment = true;
+  patch(l, V(Comp));
+  assertEqual(l.el.nodeType, Node.COMMENT_NODE);
+  assert(document.body.contains(l.el));
+  unmount(l);
 });
 
 patchTest.runTests();
