@@ -640,6 +640,91 @@ patchTest.addTest('keyed reorder: no lifecycle events fire', () => {
   unmount(l);
 });
 
+// --- $onUpdate lifecycle ---
+
+patchTest.addTest('$onUpdate fires on element in-place patch', () => {
+  let updateCount = 0;
+  const l = L(V('div', { $onUpdate() { updateCount++; } }));
+  assertEqual(updateCount, 0);
+  patch(l, V('div'));
+  assertEqual(updateCount, 1);
+});
+
+patchTest.addTest('$onUpdate does not fire on create', () => {
+  let updateCount = 0;
+  L(V('div', { $onUpdate() { updateCount++; } }));
+  assertEqual(updateCount, 0);
+});
+
+patchTest.addTest('$onUpdate does not fire on full replace', () => {
+  let updateCount = 0;
+  const l = L(V('div', { $onUpdate() { updateCount++; } }));
+  mount(l, document.body);
+  const result = patch(l, V('span'));
+  assertEqual(updateCount, 0);
+  unmount(result);
+});
+
+patchTest.addTest('$onUpdate receives current self.vnode', () => {
+  let capturedId = null;
+  const l = L(V('div', { $onUpdate(self) { capturedId = self.vnode.props.id; } }));
+  const newVnode = V('div', { id: 'updated' });
+  patch(l, newVnode);
+  assertEqual(capturedId, 'updated');
+});
+
+patchTest.addTest('$onUpdate fires on stateless component patch', () => {
+  let updateCount = 0;
+  function Comp({ name }) { return V('div', name); }
+  const l = L(V(Comp, { name: 'Alice', $onUpdate() { updateCount++; } }));
+  assertEqual(updateCount, 0);
+  patch(l, V(Comp, { name: 'Bob' }));
+  assertEqual(updateCount, 1);
+});
+
+patchTest.addTest('$onUpdate fires on stateful component patch', () => {
+  let updateCount = 0;
+  let count = 0;
+  function Counter() { return () => V('div', String(count)); }
+  const l = L(V(Counter, { $onUpdate() { updateCount++; } }));
+  assertEqual(updateCount, 0);
+  count = 1;
+  patch(l, l.vnode);
+  assertEqual(updateCount, 1);
+});
+
+patchTest.addTest('$onUpdate fires on fragment patch', () => {
+  let updateCount = 0;
+  const l = L(V('div',
+    V(Fragment, { $onUpdate() { updateCount++; } }, V('span', 'hello')),
+  ));
+  mount(l, document.body);
+  patch(l, V('div', V(Fragment, null, V('span', 'world'))));
+  assertEqual(updateCount, 1);
+  unmount(l);
+});
+
+patchTest.addTest('$onUpdate: self.el is current when component changes output tag', () => {
+  let useSpan = false;
+  let capturedTag = null;
+  function Comp() { return useSpan ? V('span') : V('div'); }
+  const l = L(V(Comp, { $onUpdate(self) { capturedTag = self.el.tagName; } }));
+  mount(l, document.body);
+  useSpan = true;
+  patch(l, V(Comp));
+  assertEqual(capturedTag, 'SPAN');
+  unmount(l);
+});
+
+patchTest.addTest('$onUpdate fires once per patch call', () => {
+  let updateCount = 0;
+  const l = L(V('div', { $onUpdate() { updateCount++; } }));
+  patch(l, V('div'));
+  patch(l, V('div'));
+  patch(l, V('div'));
+  assertEqual(updateCount, 3);
+});
+
 // --- Return value ---
 
 patchTest.addTest('in-place patch returns same self reference', () => {

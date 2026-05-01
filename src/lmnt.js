@@ -378,6 +378,7 @@ export function patch(self, newVnode) {
   if (self.isFragment) {
     patchChildren(self, newVnode, self.el.parentNode, self.el);
     self.vnode = newVnode;
+    self.hooks?.onUpdate?.forEach(fn => fn(self));
     return self;
   }
 
@@ -387,6 +388,7 @@ export function patch(self, newVnode) {
     self.childL = patch(self.childL, innerVnode);
     self.el = self.childL.el;
     self.vnode = newVnode;
+    self.hooks?.onUpdate?.forEach(fn => fn(self));
     return self;
   }
 
@@ -412,6 +414,7 @@ export function patch(self, newVnode) {
   patchChildren(self, newVnode, el, null);
 
   self.vnode = newVnode;
+  self.hooks?.onUpdate?.forEach(fn => fn(self));
   return self;
 }
 
