@@ -1,3 +1,5 @@
+const _constructionStack = [];
+
 const attrAliases = {
   'class': 'className',
   'for': 'htmlFor',
@@ -119,7 +121,7 @@ function replaceSelfWith(self, newSelf) {
   removeEls(self);
 }
 
-export function L(vnode) {
+export function L(vnode, _parentL = null) {
   // Create text nodes from primitives
   if (isPrimitive(vnode)) {
     return {
@@ -128,27 +130,36 @@ export function L(vnode) {
     }
   }
 
-  const self = { vnode };
+  const self = { vnode, _parentL };
 
   if (vnode.type === Fragment) {
   // Fragment
     self.el = document.createComment('');
     self.isFragment = true;
-    self.children = vnode.children.map(child => L(child));
+    self.children = vnode.children.map(child => L(child, self));
     self.hooks = Object.fromEntries(Object.entries(vnode.hooks).map(([k, v]) => [k, [...v]]));
     vnode.hooks.onCreate?.forEach(fn => fn(self));
     return self;
   }
 
+  // Initialize hooks before component fn runs so it can write to them (e.g. bindSignal)
+  self.hooks = Object.fromEntries(Object.entries(vnode.hooks).map(([key, val]) => [key, [...val]]));
+
   if (typeof vnode.type === 'function') {
   // Component
-    let res = vnode.type({ ...vnode.props, children: vnode.children });
+    _constructionStack.push(self);
+    let res;
+    try {
+      res = vnode.type({ ...vnode.props, children: vnode.children });
+    } finally {
+      _constructionStack.pop();
+    }
     if (typeof res === 'function') {
       self.render = res;
-      self.childL = L(res({ ...vnode.props, children: vnode.children }));
+      self.childL = L(res({ ...vnode.props, children: vnode.children }), self);
     } else {
       self.render = vnode.type;
-      self.childL = L(res);
+      self.childL = L(res, self);
     }
 
     self.el = self.childL.el;
@@ -164,7 +175,7 @@ export function L(vnode) {
 
     // Children
     vnode.children.forEach(child => {
-      const childL = L(child);
+      const childL = L(child, self);
       self.children.push(childL);
       appendEls(self.el, childL);
     });
@@ -185,9 +196,6 @@ export function L(vnode) {
       patch(self, { ...self.vnode, props });
     }
   };
-
-  // Deep copy hook arrays
-  self.hooks = Object.fromEntries(Object.entries(vnode.hooks).map(([key, val]) => [key, [...val]]));
 
   // Run onCreate lifecycle after all elements are created
   vnode.hooks.onCreate?.forEach(fn => { fn(self) });
@@ -295,7 +303,7 @@ function patchChildren(self, newVnode, parent, endBoundary) {
         keyedOld.delete(k);
         newChildren.push(patch(oldL, newV));
       } else {
-        const newL = L(newV);
+        const newL = L(newV, self);
         newNodes.push(newL);
         newChildren.push(newL);
       }
@@ -304,7 +312,7 @@ function patchChildren(self, newVnode, parent, endBoundary) {
       if (oldL) {
         newChildren.push(patch(oldL, newV));
       } else {
-        const newL = L(newV);
+        const newL = L(newV, self);
         newNodes.push(newL);
         newChildren.push(newL);
       }
@@ -351,7 +359,7 @@ export function patch(self, newVnode) {
       return self;
     }
     // text → element/fragment: full replace
-    const newSelf = L(newVnode);
+    const newSelf = L(newVnode, self._parentL);
     replaceSelfWith(self, newSelf);
     runMountLifecycle(newSelf);
     return newSelf;
@@ -359,7 +367,7 @@ export function patch(self, newVnode) {
 
   // element/fragment → text: full replace
   if (isPrimitive(newVnode)) {
-    const newSelf = L(newVnode);
+    const newSelf = L(newVnode, self._parentL);
     replaceSelfWith(self, newSelf);
     unmount(self);
     return newSelf;
@@ -367,7 +375,7 @@ export function patch(self, newVnode) {
 
   // Different type = full replace
   if (self.vnode.type !== newVnode.type) {
-    const newSelf = L(newVnode);
+    const newSelf = L(newVnode, self._parentL);
     replaceSelfWith(self, newSelf);
     unmount(self);
     runMountLifecycle(newSelf);
@@ -416,6 +424,30 @@ export function patch(self, newVnode) {
   self.vnode = newVnode;
   self.hooks?.onUpdate?.forEach(fn => fn(self));
   return self;
+}
+
+export function getSelf() {
+  const self = _constructionStack[_constructionStack.length - 1];
+  if (!self) throw new Error('getSelf() must be called during component initialization');
+  return self;
+}
+
+export function provide(key, value) {
+  const self = _constructionStack[_constructionStack.length - 1];
+  if (!self) throw new Error('provide() must be called during component initialization');
+  self._context ??= {};
+  self._context[key] = value;
+}
+
+export function inject(key, defaultValue) {
+  const self = _constructionStack[_constructionStack.length - 1];
+  if (!self) throw new Error('inject() must be called during component initialization');
+  let node = self._parentL;
+  while (node) {
+    if (node._context && key in node._context) return node._context[key];
+    node = node._parentL;
+  }
+  return defaultValue;
 }
 
 // Subscribe self to a signal and rerender on change. Auto-unsubscribes on unmount.
