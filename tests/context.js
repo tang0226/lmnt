@@ -123,9 +123,8 @@ suite.addTest('reactive context: bindSignal on injected signal triggers re-rende
     return () => V(Child);
   }
   function Child() {
-    const self = getSelf();
     const t = inject('theme');
-    bindSignal(self, t);
+    bindSignal(t);
     return () => V('div', t.get());
   }
 

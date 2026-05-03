@@ -451,16 +451,38 @@ export function inject(key, defaultValue) {
 }
 
 // Subscribe self to a signal and rerender on change. Auto-unsubscribes on unmount.
-export function bindSignal(self, sig) {
-  const unsub = sig.subscribe(() => self.update());
+// bindSignal(self, sig) — explicit self
+// bindSignal(sig)       — reads self from construction stack during component initialization
+export function bindSignal(selfOrSig, sig) {
+  let self, s;
+  if (sig === undefined) {
+    self = _constructionStack[_constructionStack.length - 1];
+    if (!self) throw new Error('bindSignal(sig) must be called during component initialization when self is omitted');
+    s = selfOrSig;
+  } else {
+    self = selfOrSig;
+    s = sig;
+  }
+  const unsub = s.subscribe(() => self.update());
   (self.hooks.onUnmount ||= []).push(unsub);
 }
 
 // Subscribe self to a store and rerender when selected state changes. Auto-unsubscribes on unmount.
-export function bindStore(self, store, {
-  select = s => s,
-  shouldUpdate = (next, prev) => !Object.is(next, prev),
-} = {}) {
+// bindStore(self, store, opts?) — explicit self
+// bindStore(store, opts?)       — reads self from construction stack during component initialization
+export function bindStore(...args) {
+  let self, store, options;
+  if (typeof args[1]?.getState === 'function') {
+    // bindStore(self, store, opts?)
+    [self, store, options] = args;
+  } else {
+    // bindStore(store, opts?)
+    self = _constructionStack[_constructionStack.length - 1];
+    if (!self) throw new Error('bindStore(store, opts) must be called during component initialization when self is omitted');
+    [store, options] = args;
+  }
+
+  const { select = s => s, shouldUpdate = (next, prev) => !Object.is(next, prev) } = options ?? {};
   let prev = select(store.getState());
 
   const unsub = store.subscribe((state) => {
