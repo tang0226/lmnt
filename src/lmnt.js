@@ -1,3 +1,5 @@
+import { signal } from './signal.js';
+
 const _constructionStack = [];
 
 const attrAliases = {
@@ -448,6 +450,25 @@ export function inject(key, defaultValue) {
     node = node._parentL;
   }
   return defaultValue;
+}
+
+// Creates a signal and auto-subscribes the current component. Must be called during initialization.
+export function useState(initial) {
+  const sig = signal(initial);
+  bindSignal(sig);
+  return sig;
+}
+
+// Registers a side effect to run on mount. If fn returns a function, it runs on unmount.
+export function useEffect(fn) {
+  const self = _constructionStack[_constructionStack.length - 1];
+  if (!self) throw new Error('useEffect() must be called during component initialization');
+  (self.hooks.onMount ??= []).push(() => {
+    const cleanup = fn();
+    if (typeof cleanup === 'function') {
+      (self.hooks.onUnmount ??= []).push(cleanup);
+    }
+  });
 }
 
 // Subscribe self to a signal and rerender on change. Auto-unsubscribes on unmount.
