@@ -140,7 +140,7 @@ export function L(vnode, _parentL = null) {
     self.isFragment = true;
     self.children = vnode.children.map(child => L(child, self));
     self.hooks = Object.fromEntries(Object.entries(vnode.hooks).map(([k, v]) => [k, [...v]]));
-    vnode.hooks.onCreate?.forEach(fn => fn(self));
+    self.hooks.onCreate?.forEach(fn => fn(self));
     return self;
   }
 
@@ -200,7 +200,7 @@ export function L(vnode, _parentL = null) {
   };
 
   // Run onCreate lifecycle after all elements are created
-  vnode.hooks.onCreate?.forEach(fn => { fn(self) });
+  self.hooks.onCreate?.forEach(fn => { fn(self) });
 
   return self;
 }
