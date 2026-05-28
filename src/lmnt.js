@@ -41,8 +41,6 @@ export function V(type, props = {}, ...children) {
         key = val;
       } else if (prop[0] === '$') {
         hooks[prop.slice(1)] = [val];
-      } else if (prop.startsWith('on')) {
-        cleanProps[prop.toLowerCase()] = val;
       } else {
         cleanProps[prop] = val;
       }
@@ -169,6 +167,7 @@ export function L(vnode, _parentL = null) {
   // Tag
     self.el = document.createElement(vnode.type);
     self.children = [];
+    self.events = {};
 
     // Props
     for (const prop in vnode.props) {
@@ -184,11 +183,8 @@ export function L(vnode, _parentL = null) {
 
     // Events
     self.handleEvent = (e) => {
-      const type = e.type;
-      const handler = self.vnode.props['on' + type];
-      if (handler) {
-        handler(e, self);
-      }
+      const handler = self.events[e.type];
+      if (handler) handler(e, self);
     }
   }
 
@@ -236,8 +232,12 @@ function patchProp(el, prop, prev, next, self) {
     const eName = prop.slice(2).toLowerCase();
     if (!prev && next) {
       el.addEventListener(eName, self);
+      self.events[eName] = next;
     } else if (prev && !next) {
       el.removeEventListener(eName, self);
+      delete self.events[eName];
+    } else if (next) {
+      self.events[eName] = next;
     }
   } else if (prop === 'style') {
     if (typeof next === 'string') {

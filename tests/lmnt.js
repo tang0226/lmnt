@@ -83,15 +83,6 @@ vTest.addTest('creates empty hooks when none are provided', () => {
   assertDeepEqual(vnode.hooks, {});
 });
 
-vTest.addTest('normalizes event prop names to lowercase', () => {
-  const handler = () => {};
-  const vnode = V('div', { onClick: handler, onMouseEnter: handler });
-  assertDefined(vnode.props.onclick);
-  assertDefined(vnode.props.onmouseenter);
-  assertEqual(vnode.props.onClick, undefined);
-  assertEqual(vnode.props.onMouseEnter, undefined);
-});
-
 vTest.runTests();
 
 const lTest = new TestSuite('L');
