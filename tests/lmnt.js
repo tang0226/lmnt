@@ -472,6 +472,19 @@ bindSignalTest.addTest('stops patching after unmount', () => {
   assertEqual(l.el.textContent, 'before');
 });
 
+bindSignalTest.addTest('preserves parent-supplied props when signal triggers re-render', () => {
+  const sig = signal(0);
+  function MyComponent({ label }) {
+    return () => V('div', `${label}:${sig.get()}`);
+  }
+  const l = L(V(MyComponent, { label: 'count' }));
+  mount(l, document.body);
+  bindSignal(l, sig);
+  sig.set(1);
+  assertEqual(l.el.textContent, 'count:1');
+  unmount(l);
+});
+
 bindSignalTest.runTests();
 
 const bindStoreTest = new TestSuite('bindStore');

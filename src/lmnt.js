@@ -189,7 +189,7 @@ export function L(vnode, _parentL = null) {
   }
 
   // Update function (patches self with new props)
-  self.update = (props) => {
+  self.update = (props = self.vnode.props) => {
     if (self.render) {
       patch(self, { ...self.vnode, props });
     }
