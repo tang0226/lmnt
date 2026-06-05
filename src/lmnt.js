@@ -52,10 +52,10 @@ export function V(type, props = {}, ...children) {
   for (const child of children) {
     if (Array.isArray(child)) {
       for (const c of child) {
-        childArray.push(c);
+        if (c !== null) childArray.push(c);
       }
     } else {
-      childArray.push(child);
+      if (child !== null) childArray.push(child);
     }
   }
 
@@ -191,7 +191,7 @@ export function L(vnode, _parentL = null) {
   // Update function (patches self with new props)
   self.update = (props = self.vnode.props) => {
     if (self.render) {
-      patch(self, { ...self.vnode, props });
+      patch(self, props !== undefined ? { ...self.vnode, props } : self.vnode);
     }
   };
 

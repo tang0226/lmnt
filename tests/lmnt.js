@@ -83,6 +83,21 @@ vTest.addTest('creates empty hooks when none are provided', () => {
   assertDeepEqual(vnode.hooks, {});
 });
 
+vTest.addTest('filters out null children', () => {
+  const vnode = V('div', {}, null, 'a', null, 'b');
+  assertDeepEqual(vnode.children, ['a', 'b']);
+});
+
+vTest.addTest('filters out null entries inside child arrays', () => {
+  const vnode = V('div', {}, [null, 'a', null], ['b', null]);
+  assertDeepEqual(vnode.children, ['a', 'b']);
+});
+
+vTest.addTest('all-null children produces empty children array', () => {
+  const vnode = V('div', {}, null, null);
+  assertDeepEqual(vnode.children, []);
+});
+
 vTest.runTests();
 
 const lTest = new TestSuite('L');
@@ -135,6 +150,12 @@ lTest.addTest('creates child DOM nodes', () => {
     )
   );
   assertEqual(l.el.children.length, 2);
+});
+
+lTest.addTest('null children produce no DOM nodes', () => {
+  const l = L(V('div', {}, null, V('span'), null));
+  assertEqual(l.el.childNodes.length, 1);
+  assertEqual(l.el.children[0].tagName, 'SPAN');
 });
 
 lTest.addTest('creates text children', () => {
@@ -487,6 +508,32 @@ bindSignalTest.addTest('preserves parent-supplied props when signal triggers re-
 
 bindSignalTest.runTests();
 
+const updateTest = new TestSuite('self.update');
+
+updateTest.addTest('calling update() with no args preserves parent-supplied props', () => {
+  function MyComponent({ label }) {
+    return () => V('div', label);
+  }
+  const l = L(V(MyComponent, { label: 'hello' }));
+  mount(l, document.body);
+  l.update(); // no args — must not clear props
+  assertEqual(l.el.textContent, 'hello');
+  unmount(l);
+});
+
+updateTest.addTest('calling update(newProps) overrides props for that render', () => {
+  function MyComponent({ label }) {
+    return ({ label }) => V('div', label);
+  }
+  const l = L(V(MyComponent, { label: 'hello' }));
+  mount(l, document.body);
+  l.update({ label: 'world' });
+  assertEqual(l.el.textContent, 'world');
+  unmount(l);
+});
+
+updateTest.runTests();
+
 const bindStoreTest = new TestSuite('bindStore');
 
 bindStoreTest.addTest('adds unsubscribe function to onUnmount hooks', () => {
@@ -549,6 +596,22 @@ bindStoreTest.addTest('select: only rerenders when selected value changes', () =
   assertEqual(l.el.textContent, 'initial-a');
   store.dispatch({ type: 'SET_A', payload: 'changed-a' });
   assertEqual(l.el.textContent, 'changed-a');
+  unmount(l);
+});
+
+bindStoreTest.addTest('preserves parent-supplied props when store dispatch triggers re-render', () => {
+  const store = createStore(
+    (state, action) => action.type === 'INC' ? { count: state.count + 1 } : state,
+    { count: 0 }
+  );
+  function MyComponent({ label }) {
+    return () => V('div', `${label}:${store.getState().count}`);
+  }
+  const l = L(V(MyComponent, { label: 'count' }));
+  mount(l, document.body);
+  bindStore(l, store);
+  store.dispatch({ type: 'INC' });
+  assertEqual(l.el.textContent, 'count:1');
   unmount(l);
 });
 
