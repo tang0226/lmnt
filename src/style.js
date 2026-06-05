@@ -28,7 +28,7 @@ export function useStyle(cssText) {
   let entry = _cache.get(cssText);
   if (!entry) {
     const id = 'lmnt-' + (_counter++).toString(36);
-    const scoped = cssText.replace(/&/g, `[data-s="${id}"]`);
+    const scoped = cssText.replace(/&/g, `[data-s~="${id}"]`);
     entry = { id, scoped, count: 0 };
     _cache.set(cssText, entry);
     _rebuild();
@@ -39,8 +39,16 @@ export function useStyle(cssText) {
   const captured = entry;
 
   // Apply after self.el is ready. Also on update in case the root element type changes.
+  // Appends to existing data-s (space-separated) so nested components sharing the same
+  // root element don't overwrite each other's scope ID.
   const applyAttr = () => {
-    if (self.el.nodeType === 1) self.el.setAttribute('data-s', id);
+    if (self.el.nodeType !== 1) return;
+    const existing = self.el.getAttribute('data-s');
+    if (!existing) {
+      self.el.setAttribute('data-s', id);
+    } else if (!existing.split(' ').includes(id)) {
+      self.el.setAttribute('data-s', `${existing} ${id}`);
+    }
   };
   (self.hooks.onCreate ??= []).push(applyAttr);
   (self.hooks.onUpdate ??= []).push(applyAttr);

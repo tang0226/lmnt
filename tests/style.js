@@ -1,4 +1,4 @@
-import { V, L, mount, unmount, useState, Fragment } from '../src/index.js';
+import { V, L, mount, unmount, patch, useState, Fragment } from '../src/index.js';
 import { useStyle } from '../src/style.js';
 import {
   assert,
@@ -41,7 +41,7 @@ styleTest.addTest('uses a single <style> tag regardless of how many component ty
 
 // --- Scoping ---
 
-styleTest.addTest('replaces all & occurrences with [data-s=<id>] attribute selector', () => {
+styleTest.addTest('replaces all & occurrences with [data-s~=<id>] word-match selector', () => {
   function MyComp() {
     useStyle('& { font-size: 14px; } &:hover { opacity: 0.8; }');
     return V('div');
@@ -49,8 +49,8 @@ styleTest.addTest('replaces all & occurrences with [data-s=<id>] attribute selec
   const l = L(V(MyComp));
   const id = l.el.getAttribute('data-s');
   const content = document.head.querySelector('style[data-lmnt]').textContent;
-  assert(content.includes(`[data-s="${id}"] { font-size: 14px; }`));
-  assert(content.includes(`[data-s="${id}"]:hover { opacity: 0.8; }`));
+  assert(content.includes(`[data-s~="${id}"] { font-size: 14px; }`));
+  assert(content.includes(`[data-s~="${id}"]:hover { opacity: 0.8; }`));
   unmount(l);
 });
 
@@ -69,7 +69,7 @@ styleTest.addTest('data-s value on root element matches the selector in the styl
   const l = L(V(MyComp));
   const id = l.el.getAttribute('data-s');
   const content = document.head.querySelector('style[data-lmnt]').textContent;
-  assert(content.includes(`[data-s="${id}"]`));
+  assert(content.includes(`[data-s~="${id}"]`));
   unmount(l);
 });
 
@@ -102,7 +102,7 @@ styleTest.addTest('rule block appears exactly once in style tag with multiple in
   const l3 = L(V(MyComp));
   const id = l1.el.getAttribute('data-s');
   const content = document.head.querySelector('style[data-lmnt]').textContent;
-  const occurrences = content.split(`[data-s="${id}"]`).length - 1;
+  const occurrences = content.split(`[data-s~="${id}"]`).length - 1;
   assertEqual(occurrences, 1);
   unmount(l1);
   unmount(l2);
@@ -120,10 +120,10 @@ styleTest.addTest('keeps CSS rules while at least one instance is mounted', () =
   const styleEl = document.head.querySelector('style[data-lmnt]');
 
   unmount(l1);
-  assert(styleEl.textContent.includes(`[data-s="${id}"]`), 'rules should remain with 1 instance');
+  assert(styleEl.textContent.includes(`[data-s~="${id}"]`), 'rules should remain with 1 instance');
 
   unmount(l2);
-  assert(!styleEl.textContent.includes(`[data-s="${id}"]`), 'rules should be removed with 0 instances');
+  assert(!styleEl.textContent.includes(`[data-s~="${id}"]`), 'rules should be removed with 0 instances');
 });
 
 styleTest.addTest('re-adds CSS rules when a new instance is created after full cleanup', () => {
@@ -137,9 +137,8 @@ styleTest.addTest('re-adds CSS rules when a new instance is created after full c
   const l2 = L(V(MyComp));
   const id2 = l2.el.getAttribute('data-s');
   const styleEl = document.head.querySelector('style[data-lmnt]');
-
   assertNotEqual(id1, id2); // new scope ID issued after purge
-  assert(styleEl.textContent.includes(`[data-s="${id2}"]`));
+  assert(styleEl.textContent.includes(`[data-s~="${id2}"]`));
   unmount(l2);
 });
 
@@ -184,6 +183,41 @@ styleTest.addTest('does not set data-s on Fragment anchor (comment node)', () =>
   const l = L(V(MyComp));
   // l.el is the comment anchor — it has nodeType 8, not 1, so setAttribute is skipped
   assertEqual(l.el.nodeType, Node.COMMENT_NODE);
+  unmount(l);
+});
+
+// --- Nested component collision ---
+
+styleTest.addTest('both scope IDs are present when outer component root is inner component root', () => {
+  function Inner() {
+    useStyle('& .header { color: red; }');
+    return V('div', V('span', { class: 'header' }, 'hi'));
+  }
+  function Outer() {
+    useStyle('& .wrapper { padding: 8px; }');
+    return V(Inner);
+  }
+  const l = L(V(Outer));
+  const ids = l.el.getAttribute('data-s').split(' ');
+  const styleEl = document.head.querySelector('style[data-lmnt]');
+  // Both scope IDs must be on the shared root element
+  assertEqual(ids.length, 2);
+  assert(styleEl.textContent.includes(`[data-s~="${ids[0]}"]`));
+  assert(styleEl.textContent.includes(`[data-s~="${ids[1]}"]`));
+  unmount(l);
+});
+
+styleTest.addTest('appending is idempotent — repeated onCreate/onUpdate does not duplicate IDs', () => {
+  function MyComp() {
+    useStyle('& { color: teal; }');
+    return () => V('div');
+  }
+  const l = L(V(MyComp));
+  mount(l, document.body);
+  const id = l.el.getAttribute('data-s');
+  // Simulate a re-render that leaves the same element in place
+  patch(l, l.vnode);
+  assertEqual(l.el.getAttribute('data-s'), id);
   unmount(l);
 });
 
